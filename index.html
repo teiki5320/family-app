@@ -11,13 +11,13 @@
 <body>
 <header class="app-header">
   <h1>📒 Famille</h1>
-  <button id="shareBtn" class="ghost" title="Exporter toutes les données">↥ Export</button>
 </header>
 
 <nav class="tabs" role="tablist">
   <button class="tab active" data-tab="home" aria-selected="true">Accueil</button>
   <button class="tab" data-tab="tasks">Tâches</button>
   <button class="tab" data-tab="budget">Budget</button>
+  <button class="tab" data-tab="weather">Météo</button>
   <button class="tab" data-tab="notes">Notes</button>
   <button class="tab" data-tab="calendar">Calendrier</button>
   <button class="tab" data-tab="chat">Messages</button>
@@ -57,6 +57,13 @@
           <div class="subtitle">Solde : <span id="dashBalance">0,00 €</span></div>
         </button>
 
+        <!-- Tuile Météo -->
+        <button class="tile" data-tab="weather">
+          <div class="icon">🌤️</div>
+          <div class="title">Météo</div>
+          <div class="subtitle" id="wxTile">Chargement…</div>
+        </button>
+
         <button class="tile" data-external="docs">
           <div class="icon">📁</div>
           <div class="title">Documents</div>
@@ -74,11 +81,6 @@
           <div class="title">Menu</div>
           <div class="subtitle">Clic&miam du jour</div>
         </button>
-      </div>
-
-      <div class="row">
-        <button id="importBtn" class="secondary">Importer des données</button>
-        <input id="importFile" type="file" accept="application/json" hidden>
       </div>
     </div>
   </section>
@@ -121,6 +123,24 @@
     <ul id="txList" class="list"></ul>
   </section>
 
+  <!-- Météo -->
+  <section id="weather" class="panel" role="tabpanel">
+    <h2>Météo</h2>
+
+    <div class="wx-now">
+      <div class="wx-main">
+        <div class="wx-emoji" id="wxEmoji">⛅</div>
+        <div>
+          <div class="wx-temp" id="wxTemp">--°</div>
+          <div class="wx-desc" id="wxDesc">--</div>
+        </div>
+      </div>
+      <div class="wx-place" id="wxPlace">Localisation…</div>
+    </div>
+
+    <ul class="list" id="wxDaily"></ul>
+  </section>
+
   <!-- Notes -->
   <section id="notes" class="panel" role="tabpanel">
     <h2>Notes</h2>
@@ -131,52 +151,51 @@
   </section>
 
   <!-- Calendrier -->
- <!-- Calendrier -->
-<section id="calendar" class="panel" role="tabpanel">
-  <h2>Calendrier familial</h2>
+  <section id="calendar" class="panel" role="tabpanel">
+    <h2>Calendrier familial</h2>
 
-  <!-- Barre de contrôle -->
-  <div class="row" style="flex-wrap:wrap;gap:10px;align-items:center">
-    <div class="cal-controls">
-      <button id="calPrev" class="ghost">◀︎</button>
-      <div id="calMonthLabel" class="cal-month">--</div>
-      <button id="calNext" class="ghost">▶︎</button>
-      <button id="calToday" class="secondary">Aujourd’hui</button>
+    <!-- Barre de contrôle -->
+    <div class="row" style="flex-wrap:wrap;gap:10px;align-items:center">
+      <div class="cal-controls">
+        <button id="calPrev" class="ghost">◀︎</button>
+        <div id="calMonthLabel" class="cal-month">--</div>
+        <button id="calNext" class="ghost">▶︎</button>
+        <button id="calToday" class="secondary">Aujourd’hui</button>
+      </div>
+      <div class="spacer"></div>
+      <input id="calSearch" type="search" placeholder="Rechercher…" style="max-width:260px">
+      <select id="calFilter" style="max-width:180px">
+        <option value="*">Toutes catégories</option>
+        <option value="Famille">Famille</option>
+        <option value="École">École</option>
+        <option value="Santé">Santé</option>
+        <option value="Autre">Autre</option>
+      </select>
     </div>
-    <div class="spacer"></div>
-    <input id="calSearch" type="search" placeholder="Rechercher…" style="max-width:260px">
-    <select id="calFilter" style="max-width:180px">
-      <option value="*">Toutes catégories</option>
-      <option value="Famille">Famille</option>
-      <option value="École">École</option>
-      <option value="Santé">Santé</option>
-      <option value="Autre">Autre</option>
-    </select>
-  </div>
 
-  <!-- Grille mensuelle -->
-  <div id="calGrid" class="cal-grid"></div>
+    <!-- Grille mensuelle -->
+    <div id="calGrid" class="cal-grid"></div>
 
-  <!-- Formulaire d'ajout -->
-  <form id="eventForm" class="row" style="flex-wrap:wrap; gap:10px; margin-top:15px">
-    <input id="eventTitle"  type="text"  placeholder="Titre (ex: RDV pédiatre)" required style="flex:1 1 260px">
-    <input id="eventDate"   type="date"   required style="flex:0 0 180px">
-    <input id="eventTime"   type="time"   value="09:00" style="flex:0 0 140px">
-    <input id="eventPlace"  type="text"   placeholder="Lieu (ex: Clinique ABC)" style="flex:1 1 260px">
-    <select id="eventCategory" style="flex:0 0 180px">
-      <option value="Famille">Famille</option>
-      <option value="École">École</option>
-      <option value="Santé">Santé</option>
-      <option value="Autre" selected>Autre</option>
-    </select>
-    <textarea id="eventNote" rows="2" placeholder="Note / description…" style="flex:1 1 100%"></textarea>
-    <div class="spacer"></div>
-    <button type="submit">Ajouter</button>
-  </form>
+    <!-- Formulaire d'ajout -->
+    <form id="eventForm" class="row" style="flex-wrap:wrap; gap:10px; margin-top:15px">
+      <input id="eventTitle"  type="text"  placeholder="Titre (ex: RDV pédiatre)" required style="flex:1 1 260px">
+      <input id="eventDate"   type="date"   required style="flex:0 0 180px">
+      <input id="eventTime"   type="time"   value="09:00" style="flex:0 0 140px">
+      <input id="eventPlace"  type="text"   placeholder="Lieu (ex: Clinique ABC)" style="flex:1 1 260px">
+      <select id="eventCategory" style="flex:0 0 180px">
+        <option value="Famille">Famille</option>
+        <option value="École">École</option>
+        <option value="Santé">Santé</option>
+        <option value="Autre" selected>Autre</option>
+      </select>
+      <textarea id="eventNote" rows="2" placeholder="Note / description…" style="flex:1 1 100%"></textarea>
+      <div class="spacer"></div>
+      <button type="submit">Ajouter</button>
+    </form>
 
-  <!-- Liste des événements -->
-  <ul id="eventList" class="list"></ul>
-</section>
+    <!-- Liste des événements -->
+    <ul id="eventList" class="list"></ul>
+  </section>
 
   <!-- Messages (chat + fichiers) -->
   <section id="chat" class="panel" role="tabpanel">

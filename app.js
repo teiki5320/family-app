@@ -517,3 +517,71 @@ function updateDashboard(){
   const now = new Date(); calMonth = now.getMonth(); calYear = now.getFullYear();
   renderEvents(); syncFromWorker();
 })();
+
+// ===== MÉTÉO (Open-Meteo) =====
+// Exemple: latitude/longitude de Maché (Vendée)
+const LAT = 46.747;
+const LON = -1.721;
+
+// Sélecteurs
+const wxTile   = document.getElementById('wxTile');
+const wxEmoji  = document.getElementById('wxEmoji');
+const wxTemp   = document.getElementById('wxTemp');
+const wxDesc   = document.getElementById('wxDesc');
+const wxPlace  = document.getElementById('wxPlace');
+const wxDaily  = document.getElementById('wxDaily');
+
+// Codes météo → Emoji + texte
+function codeToWeather(code){
+  const map = {
+    0:["☀️","Ciel dégagé"], 1:["🌤️","Peu nuageux"], 2:["⛅","Partiellement nuageux"], 3:["☁️","Couvert"],
+    45:["🌫️","Brouillard"], 48:["🌫️","Brouillard givrant"],
+    51:["🌦️","Bruine légère"], 53:["🌦️","Bruine"], 55:["🌦️","Bruine forte"],
+    61:["🌧️","Pluie légère"], 63:["🌧️","Pluie"], 65:["🌧️","Pluie forte"],
+    71:["🌨️","Neige légère"], 73:["🌨️","Neige"], 75:["❄️","Neige forte"],
+    95:["⛈️","Orage"], 96:["⛈️","Orage avec grêle"], 99:["⛈️","Orage fort grêle"]
+  };
+  return map[code] || ["❔","Indéfini"];
+}
+
+async function loadWeather(){
+  try{
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,weathercode&daily=temperature_2m_max,temperature_2m_min,weathercode&timezone=Europe%2FParis`;
+    const r = await fetch(url);
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    const data = await r.json();
+
+    // météo actuelle
+    const cur = data.current;
+    const [emo,txt] = codeToWeather(cur.weathercode);
+    if(wxEmoji) wxEmoji.textContent = emo;
+    if(wxTemp)  wxTemp.textContent  = `${Math.round(cur.temperature_2m)}°C`;
+    if(wxDesc)  wxDesc.textContent  = txt;
+    if(wxTile)  wxTile.textContent  = `${Math.round(cur.temperature_2m)}°C · ${txt}`;
+    if(wxPlace) wxPlace.textContent = "Maché, Vendée";
+
+    // prévisions quotidiennes
+    if(wxDaily){
+      wxDaily.innerHTML = '';
+      data.daily.time.forEach((d,i)=>{
+        const [emo2,txt2] = codeToWeather(data.daily.weathercode[i]);
+        const li = document.createElement('li');
+        li.className='item';
+        li.innerHTML = `<div><strong>${new Date(d).toLocaleDateString('fr-FR',{weekday:'short', day:'2-digit', month:'2-digit'})}</strong>
+                        <div class="who">${txt2}</div></div>
+                        <div class="spacer"></div>
+                        <div>${emo2} ${Math.round(data.daily.temperature_2m_min[i])}° / ${Math.round(data.daily.temperature_2m_max[i])}°</div>`;
+        wxDaily.appendChild(li);
+      });
+    }
+
+  }catch(e){
+    console.error("Météo:",e);
+    if(wxTile) wxTile.textContent="Météo indisponible";
+    if(wxDesc) wxDesc.textContent="Erreur";
+  }
+}
+
+// Chargement initial + refresh toutes les 2h
+loadWeather();
+setInterval(loadWeather, 2*60*60*1000);
