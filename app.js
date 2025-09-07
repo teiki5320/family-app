@@ -365,7 +365,8 @@ function renderMonth(y,m){
   const daysInMonth = new Date(y,m+1,0).getDate();
 
   const monthLabel = new Intl.DateTimeFormat('fr-FR',{month:'long',year:'numeric'}).format(first);
-  document.getElementById('calMonthLabel')?.textContent = monthLabel;
+  const calMonthLabel = document.getElementById('calMonthLabel');
+  if (calMonthLabel) calMonthLabel.textContent = monthLabel;
 
   for(let i=0;i<start;i++){ grid.appendChild(document.createElement('div')); }
 
