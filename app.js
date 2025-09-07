@@ -14,32 +14,46 @@ try {
 function save(){ localStorage.setItem(KEY, JSON.stringify(state)); }
 function fmtEUR(x){ return (x||0).toLocaleString('fr-FR',{style:'currency',currency:'EUR'}); }
 function pad(n){ return String(n).padStart(2,'0'); }
-function escapeHTML(s){
-  return String(s ?? '')
-    .replace(/&/g,'&amp;')
-    .replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;')
-    .replace(/'/g,'&#39;');
-}
-function linkify(t){ return escapeHTML(t).replace(/https?:\/\/\S+/g, m => `<a href="${m}" target="_blank" rel="noopener">${m}</a>`); }
 
-// ===== Onglets (ignore le lien externe "Menu") =====
+// ===== Tabs (ignore le lien externe "Menu") =====
+function activateTab(tabBtn){
+  // désactive tout
+  $$('.tab').forEach(b=>b.classList.remove('active'));
+  $$('.panel').forEach(p=>p.classList.remove('active'));
+
+  // active le bouton et son panneau
+  tabBtn.classList.add('active');
+  const id = tabBtn.dataset.tab;
+  const panel = document.getElementById(id);
+  if (panel) panel.classList.add('active');
+}
+
 $$('.tab').forEach(btn=>{
-  if (btn.id === 'menuTab') return;
+  if (btn.id === 'menuTab') return; // le bouton "Menu" ouvre un lien externe
   btn.addEventListener('click', ()=>{
-    $$('.tab').forEach(b=>b.classList.remove('active'));
-    $$('.panel').forEach(p=>p.classList.remove('active'));
-    btn.classList.add('active');
-    const panel = $('#'+btn.dataset.tab);
-    if (panel) panel.classList.add('active');
+    activateTab(btn);
   });
 });
+
+// API utilitaire
 function goToTab(id){
   const tab = document.querySelector(`.tab[data-tab="${id}"]`);
-  if (!tab) return;
-  tab.click();
+  if (tab) activateTab(tab);
 }
+
+// à l’arrivée, s’assurer que l’onglet initial est bien actif
+(() => {
+  const current = document.querySelector('.tab.active[data-tab]');
+  if (current) activateTab(current);
+})();
+
+// Quand on ouvre l'onglet Calendrier : on remet les filtres à zéro
+document.querySelector('.tab[data-tab="calendar"]')?.addEventListener('click', ()=>{
+  selectedDate = null;
+  const f = document.getElementById('calFilter');  if (f) f.value = '*';
+  const s = document.getElementById('calSearch');  if (s) s.value = '';
+  renderEvents();
+});
 
 // ===== MENU (Clic&miam du jour) =====
 const MENU_PREFIX = "https://clicetmiam.fr/mesmenus/5387/5765/";
@@ -56,13 +70,13 @@ function buildMenuUrl(d){
 $('#menuTab')?.addEventListener('click', (e)=>{ e.preventDefault(); window.open(buildMenuUrl(new Date()), '_blank'); });
 $('#tileMenu')?.addEventListener('click', ()=> window.open(buildMenuUrl(new Date()), '_blank'));
 
-// ===== Dashboard: tuiles =====
+// ===== Dashboard interactions =====
 document.querySelectorAll('.tile[data-tab]')?.forEach(t=> t.addEventListener('click', ()=> goToTab(t.dataset.tab)));
 document.querySelectorAll('.tile[data-external]')?.forEach(t=>{
   t.addEventListener('click', ()=>{
-    const map = { docs:'https://drive.google.com/', messages:'#chat' };
+    const map = { docs:'#docs', messages:'#chat' };
     const url = map[t.dataset.external] || '#';
-    if (url === '#chat') goToTab('chat'); else window.open(url, '_blank');
+    if (url.startsWith('#')) goToTab(url.slice(1)); else window.open(url, '_blank');
   });
 });
 
@@ -79,8 +93,8 @@ function renderTasks(){
     li.innerHTML = `
       <input type="checkbox" ${t.done ? 'checked' : ''} aria-label="Terminer">
       <div>
-        <div>${escapeHTML(t.text)}</div>
-        <div class="who">${escapeHTML(t.who || 'Tous')}</div>
+        <div>${t.text}</div>
+        <div class="who">${t.who || 'Tous'}</div>
       </div>
       <div class="spacer"></div>
       <button class="del" aria-label="Supprimer">Suppr</button>
@@ -112,8 +126,7 @@ function renderBudget(){
     const li = document.createElement('li');
     li.className = 'item';
     li.innerHTML = `
-      <div><strong>${escapeHTML(t.label)}</strong>
-      <div class="who">${new Date(t.ts).toLocaleDateString('fr-FR')}</div></div>
+      <div><strong>${t.label}</strong><div class="who">${new Date(t.ts).toLocaleDateString('fr-FR')}</div></div>
       <div class="spacer"></div>
       <div>${t.type==='+'?'+':''}${fmtEUR(t.amount)}</div>
       <button class="del">Suppr</button>
@@ -151,55 +164,88 @@ notesArea?.addEventListener('input', ()=>{
   }
 });
 
-// ===== EXPORT / IMPORT global =====
-$('#shareBtn')?.addEventListener('click', async ()=>{
-  const data = JSON.stringify(state, null, 2);
-  const file = new File([data], 'famille-data.json', {type:'application/json'});
-  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-    try{ await navigator.share({ files:[file], title:'Famille - Export', text:'Données de l’app' }); }catch(e){}
-  } else {
-    const url = URL.createObjectURL(file);
-    const a = document.createElement('a'); a.href = url; a.download = 'famille-data.json'; a.click();
-    URL.revokeObjectURL(url);
-    alert('Export effectué : "famille-data.json".');
-  }
-});
-$('#importBtn')?.addEventListener('click', ()=> $('#importFile')?.click());
-$('#importFile')?.addEventListener('change', async (e)=>{
-  const f = e.target.files[0]; if(!f) return;
+// ===== MÉTÉO (Open-Meteo) =====
+// RENSEIGNE ta position ici (lat/lon décimales) :
+const LAT = 46.6403, LON = -1.1616; // Maché, Vendée (exemple)
+const wxEmoji = $('#wxEmoji'), wxTemp = $('#wxTemp'), wxDesc = $('#wxDesc'), wxTile = $('#wxTile'), wxPlace = $('#wxPlace'), wxDaily = $('#wxDaily');
+
+function codeToWeather(code){
+  const map = {
+    0:"Ciel dégagé", 1:"Peu nuageux", 2:"Partiellement nuageux", 3:"Couvert",
+    45:"Brouillard", 48:"Brouillard givrant",
+    51:"Bruine légère", 53:"Bruine", 55:"Bruine forte",
+    61:"Pluie faible", 63:"Pluie", 65:"Pluie forte",
+    71:"Neige faible", 73:"Neige", 75:"Neige forte",
+    95:"Orage", 96:"Orage avec grêle", 99:"Orage fort grêle"
+  };
+  return map[code] || "--";
+}
+function codeToEmoji(code){
+  const map = {0:"☀️",1:"🌤️",2:"⛅️",3:"☁️",45:"🌫️",48:"🌫️",51:"🌦️",53:"🌧️",55:"🌧️",61:"🌧️",63:"🌧️",65:"🌧️",71:"🌨️",73:"🌨️",75:"❄️",95:"⛈️",96:"⛈️",99:"⛈️"};
+  return map[code] || "❓";
+}
+async function loadWeather(){
   try{
-    const obj = JSON.parse(await f.text());
-    state.tasks  = Array.isArray(obj.tasks)? obj.tasks : state.tasks;
-    state.tx     = Array.isArray(obj.tx)? obj.tx : state.tx;
-    state.notes  = typeof obj.notes==='string'? obj.notes : state.notes;
-    state.events = Array.isArray(obj.events)? obj.events : state.events;
-    save(); renderTasks(); renderBudget(); renderNotes(); renderEvents();
-    alert('Import réussi ✔︎');
-  }catch(err){ alert('Import impossible: ' + err.message); }
-});
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,weathercode&daily=temperature_2m_max,temperature_2m_min,weathercode&timezone=Europe%2FParis`;
+    const r = await fetch(url);
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+
+    const cur = data.current;
+    if (wxEmoji) wxEmoji.textContent = codeToEmoji(cur.weathercode);
+    if (wxTemp)  wxTemp.textContent  = `${Math.round(cur.temperature_2m)}°C`;
+    if (wxDesc)  wxDesc.textContent  = codeToWeather(cur.weathercode);
+    if (wxTile)  wxTile.textContent  = `${Math.round(cur.temperature_2m)}°C · ${codeToWeather(cur.weathercode)}`;
+    if (wxPlace) wxPlace.textContent = 'Maché, Vendée';
+
+    if (wxDaily){
+      wxDaily.innerHTML = '';
+      data.daily.time.forEach((d,i)=>{
+        const li = document.createElement('li');
+        li.className='item';
+        const txt = new Date(d).toLocaleDateString('fr-FR',{weekday:'short', day:'2-digit', month:'2-digit'});
+        li.innerHTML = `<div><strong>${txt}</strong></div>
+                        <div class="spacer"></div>
+                        <div>${codeToEmoji(data.daily.weathercode[i])}</div>
+                        <div>${Math.round(data.daily.temperature_2m_min[i])}° / ${Math.round(data.daily.temperature_2m_max[i])}°</div>`;
+        wxDaily.appendChild(li);
+      });
+    }
+  }catch(e){
+    console.error('Météo:', e);
+    if (wxTile) wxTile.textContent = 'Météo indisponible';
+    if (wxDesc) wxDesc.textContent = 'Erreur';
+  }
+}
+loadWeather();
+setInterval(loadWeather, 2*60*60*1000); // refresh 2h
 
 // ===== Chat + Fichiers (Cloudflare Worker) =====
 const WORKER_URL = 'https://family-app.teiki5320.workers.dev'; // ← ton Worker
-const SECRET = 'Partenaire85/';                                // ← mets la même valeur que dans Cloudflare
+const SECRET = 'Partenaire85/';                                // ← même valeur que dans Cloudflare
 const ROOM   = 'family';
 
 // URLs calendrier côté Worker
-const SUB_URL         = `${WORKER_URL}/calendar.ics?token=Partenaire85/`; // abonnement Apple/Google (info)
+const SUB_URL         = `${WORKER_URL}/calendar.ics?token=Partenaire85/`; // pour abonnements Apple/Google
 const WORKER_CAL_ADD  = `${WORKER_URL}/cal/add`;
 const WORKER_CAL_LIST = `${WORKER_URL}/cal/list`;
 
-const chatList   = $('#chatList');
-const chatInput  = $('#chatInput');
-const chatSend   = $('#chatSend');
-const chatFile   = $('#chatFile');
-const chatUpload = $('#chatUpload');
-const chatName   = $('#chatName');
+const chatList   = document.getElementById('chatList');
+const chatInput  = document.getElementById('chatInput');
+const chatSend   = document.getElementById('chatSend');
+const chatFile   = document.getElementById('chatFile');
+const chatUpload = document.getElementById('chatUpload');
+const chatName   = document.getElementById('chatName');
 
 const NAME_KEY = 'familyApp.chatName';
 if (chatName) chatName.value = localStorage.getItem(NAME_KEY) || '';
 chatName?.addEventListener('change', ()=> localStorage.setItem(NAME_KEY, (chatName.value||'').trim()));
 
 let lastTs = 0;
+function escapeHTML(s){ return (s||'').replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+function linkify(t){ return escapeHTML(t).replace(/https?:\/\/\S+/g, m => `<a href="${m}" target="_blank" rel="noopener">${m}</a>`); }
+function scrollBottom(){ if (chatList) chatList.scrollTop = chatList.scrollHeight; }
+
 function renderMessages(msgs){
   if(!chatList) return;
   for(const m of msgs){
@@ -213,7 +259,7 @@ function renderMessages(msgs){
     chatList.appendChild(el);
     lastTs = Math.max(lastTs, m.ts);
   }
-  if (chatList) chatList.scrollTop = chatList.scrollHeight;
+  scrollBottom();
 }
 async function refreshMessages(){
   try{
@@ -228,6 +274,7 @@ async function sendMessage(){
   const text = (chatInput?.value || '').trim();
   const author = (chatName?.value || 'Anonyme').trim() || 'Anonyme';
 
+  // 1) Fichier d'abord
   if (hasFile){
     const url = await uploadFile();
     if (url && text) {
@@ -244,6 +291,7 @@ async function sendMessage(){
     return;
   }
 
+  // 2) Message texte
   if (!text) return;
   chatInput.value = '';
   try{
@@ -303,7 +351,7 @@ chatSend?.addEventListener('click', sendMessage);
 chatInput?.addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); }});
 refreshMessages(); setInterval(refreshMessages, 4000);
 
-// ===== CALENDRIER (local + synchro Worker/ICS) =====
+// ===== CALENDRIER (local + Worker ICS) =====
 if (!Array.isArray(state.events)) state.events = [];
 const eventForm = $('#eventForm'), eventTitle = $('#eventTitle'), eventDate = $('#eventDate'), eventTime = $('#eventTime');
 
@@ -312,11 +360,13 @@ function todayISO(){
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 }
 let selectedDate = todayISO();
+
 let calMonth = new Date().getMonth();
 let calYear  = new Date().getFullYear();
 
 function renderMonth(y,m){
-  const grid = $('#calGrid'); if(!grid) return;
+  const grid = document.getElementById('calGrid');
+  if(!grid) return;
   grid.innerHTML='';
 
   const first = new Date(y,m,1);
@@ -324,7 +374,7 @@ function renderMonth(y,m){
   const daysInMonth = new Date(y,m+1,0).getDate();
 
   const monthLabel = new Intl.DateTimeFormat('fr-FR',{month:'long',year:'numeric'}).format(first);
-  $('#calMonthLabel') && ($('#calMonthLabel').textContent = monthLabel);
+  document.getElementById('calMonthLabel')?.textContent = monthLabel;
 
   for(let i=0;i<start;i++){ grid.appendChild(document.createElement('div')); }
 
@@ -354,16 +404,15 @@ function renderMonth(y,m){
     grid.appendChild(cell);
   }
 }
-
-$('#calPrev')?.addEventListener('click', ()=>{
+document.getElementById('calPrev')?.addEventListener('click', ()=>{
   if(--calMonth<0){ calMonth=11; calYear--; }
   renderMonth(calYear,calMonth);
 });
-$('#calNext')?.addEventListener('click', ()=>{
+document.getElementById('calNext')?.addEventListener('click', ()=>{
   if(++calMonth>11){ calMonth=0; calYear++; }
   renderMonth(calYear,calMonth);
 });
-$('#calToday')?.addEventListener('click', ()=>{
+document.getElementById('calToday')?.addEventListener('click', ()=>{
   const now = new Date();
   calMonth = now.getMonth();
   calYear  = now.getFullYear();
@@ -371,22 +420,14 @@ $('#calToday')?.addEventListener('click', ()=>{
   renderMonth(calYear, calMonth);
   renderEvents();
 });
-
-// Remise à zéro des filtres quand on va sur l’onglet calendrier
-document.querySelector('.tab[data-tab="calendar"]')?.addEventListener('click', ()=>{
-  selectedDate = null;
-  const f = $('#calFilter');  if (f) f.value = '*';
-  const s = $('#calSearch');  if (s) s.value = '';
-  renderEvents();
-});
-
-$('#calFilter')?.addEventListener('change', renderEvents);
-$('#calSearch')?.addEventListener('input', renderEvents);
+document.getElementById('calFilter')?.addEventListener('change', renderEvents);
+document.getElementById('calSearch')?.addEventListener('input', renderEvents);
 
 function renderEvents(){
-  const filter = $('#calFilter')?.value || '*';
-  const search = ($('#calSearch')?.value||'').toLowerCase();
-  const list = $('#eventList'); if(!list) return;
+  const filter = document.getElementById('calFilter')?.value || '*';
+  const search = (document.getElementById('calSearch')?.value||'').toLowerCase();
+  const list = document.getElementById('eventList');
+  if(!list) return;
   list.innerHTML='';
 
   const sel = selectedDate;
@@ -403,13 +444,12 @@ function renderEvents(){
     const when = `${ev.date} ${ev.time||''}`.trim();
     li.innerHTML = `
       <div>
-        <strong>${escapeHTML(ev.title)}</strong>
-        <div class="who">${escapeHTML(when)}${ev.place?` · ${escapeHTML(ev.place)}`:''} [${escapeHTML(ev.category||'Autre')}]</div>
+        <strong>${ev.title}</strong>
+        <div class="who">${when}${ev.place?` · ${ev.place}`:''} [${ev.category||'Autre'}]</div>
       </div>
       <div class="spacer"></div>
       <button class="del" aria-label="Supprimer">Suppr</button>
     `;
-
     li.querySelector('.del')?.addEventListener('click', async ()=>{
       if (ev.remoteId) {
         try{
@@ -417,12 +457,11 @@ function renderEvents(){
             method:'POST',
             headers:{ Authorization:'Bearer '+SECRET }
           });
-        }catch(_e){ /* non bloquant */ }
+        }catch(e){ /* non bloquant */ }
       }
       const idx = state.events.indexOf(ev);
-      if (idx > -1) { state.events.splice(idx,1); save(); renderEvents(); }
+      if (idx > -1) { state.events.splice(idx,1); save(); renderEvents(); renderMonth(calYear, calMonth); }
     });
-
     list.appendChild(li);
   });
 
@@ -430,8 +469,7 @@ function renderEvents(){
     const li = document.createElement('li');
     li.className = 'item';
     const msg = sel ? 'Aucun évènement ce jour' : 'Aucun évènement';
-    li.innerHTML = `<div><strong>${msg}</strong>
-                    <div class="who">Clique une autre date ou réinitialise les filtres</div></div>`;
+    li.innerHTML = `<div><strong>${msg}</strong><div class="who">Clique une autre date ou réinitialise les filtres</div></div>`;
     list.appendChild(li);
   }
 
@@ -448,16 +486,15 @@ eventForm?.addEventListener('submit', async (e)=>{
     title,
     date: eventDate.value,
     time: eventTime?.value || '09:00',
-    place: ($('#eventPlace')?.value || ''),
-    category: ($('#eventCategory')?.value || 'Autre'),
-    note: ($('#eventNote')?.value || '')
+    place: (document.getElementById('eventPlace')?.value || ''),
+    category: (document.getElementById('eventCategory')?.value || 'Autre'),
+    note: (document.getElementById('eventNote')?.value || '')
   };
 
-  state.events.push(ev);
-  save();
-  renderEvents();
-  eventForm.reset();
+  // local
+  state.events.push(ev); save(); renderEvents(); eventForm.reset();
 
+  // Worker
   try{
     const r = await fetch(WORKER_CAL_ADD, {
       method:'POST',
@@ -465,11 +502,8 @@ eventForm?.addEventListener('submit', async (e)=>{
       body: JSON.stringify(ev)
     });
     const data = await r.json().catch(()=>null);
-    if (data && data.id) {
-      const last = state.events[state.events.length - 1];
-      if (last === ev) { ev.remoteId = data.id; save(); }
-    }
-  }catch(_e){}
+    if (data && data.id) { ev.remoteId = data.id; save(); }
+  }catch(e){ /* silencieux */ }
 });
 
 async function syncFromWorker(){
@@ -494,8 +528,224 @@ async function syncFromWorker(){
       }
     }
     if (changed){ save(); renderEvents(); }
-  }catch(_e){}
+  }catch(e){}
 }
+
+// init calendrier
+(function initCalendar(){
+  const now = new Date();
+  calMonth = now.getMonth();
+  calYear  = now.getFullYear();
+  renderEvents();
+  syncFromWorker();
+})();
+
+// ===== DOCUMENTS (IndexedDB local) =====
+const DOCS_DB_NAME = 'familyDocs.v1';
+const DOCS_STORE   = 'files';
+const FOLDERS_KEY  = 'familyApp.folders';
+const STATE_DOCS = { folder: null };
+
+function loadFolders(){
+  try{
+    const arr = JSON.parse(localStorage.getItem(FOLDERS_KEY) || '[]');
+    return Array.isArray(arr) ? arr : [];
+  }catch{ return []; }
+}
+function saveFolders(arr){
+  localStorage.setItem(FOLDERS_KEY, JSON.stringify(arr));
+}
+
+let dbPromise = null;
+function openDocsDB(){
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve, reject)=>{
+    const req = indexedDB.open(DOCS_DB_NAME, 1);
+    req.onupgradeneeded = (ev)=>{
+      const db = ev.target.result;
+      if (!db.objectStoreNames.contains(DOCS_STORE)){
+        const store = db.createObjectStore(DOCS_STORE, { keyPath:'id' });
+        store.createIndex('by_folder', 'folder', { unique:false });
+      }
+    };
+    req.onsuccess = ()=> resolve(req.result);
+    req.onerror   = ()=> reject(req.error);
+  });
+  return dbPromise;
+}
+async function idbAddFile(folder, file){
+  const db = await openDocsDB();
+  const tx = db.transaction(DOCS_STORE, 'readwrite');
+  const store = tx.objectStore(DOCS_STORE);
+  const rec = {
+    id: `${folder}::${crypto.randomUUID()}`,
+    folder,
+    name: file.name,
+    type: file.type || 'application/octet-stream',
+    size: file.size || 0,
+    ts: Date.now(),
+    blob: file
+  };
+  await store.add(rec);
+  await tx.done?.catch(()=>{});
+  return rec;
+}
+async function idbListFiles(folder){
+  const db = await openDocsDB();
+  const tx = db.transaction(DOCS_STORE, 'readonly');
+  const idx = tx.objectStore(DOCS_STORE).index('by_folder');
+  const req = idx.getAll(IDBKeyRange.only(folder));
+  return await new Promise((res,rej)=>{
+    req.onsuccess = ()=> res(req.result || []);
+    req.onerror   = ()=> rej(req.error);
+  });
+}
+async function idbDeleteFile(id){
+  const db = await openDocsDB();
+  const tx = db.transaction(DOCS_STORE, 'readwrite');
+  await tx.objectStore(DOCS_STORE).delete(id);
+  await tx.done?.catch(()=>{});
+}
+async function idbDownloadFile(id){
+  const db = await openDocsDB();
+  const tx = db.transaction(DOCS_STORE, 'readonly');
+  const rec = await new Promise((res,rej)=>{
+    const r = tx.objectStore(DOCS_STORE).get(id);
+    r.onsuccess = ()=> res(r.result);
+    r.onerror   = ()=> rej(r.error);
+  });
+  if (!rec) return;
+  const url = URL.createObjectURL(rec.blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = rec.name || 'fichier'; a.click();
+  setTimeout(()=> URL.revokeObjectURL(url), 1500);
+}
+
+// UI docs
+const folderSelect     = document.getElementById('folderSelect');
+const newFolderName    = document.getElementById('newFolderName');
+const createFolderBtn  = document.getElementById('createFolderBtn');
+const deleteFolderBtn  = document.getElementById('deleteFolderBtn');
+const docFileInput     = document.getElementById('docFile');
+const uploadDocBtn     = document.getElementById('uploadDocBtn');
+const exportFolderBtn  = document.getElementById('exportFolderBtn');
+const docList          = document.getElementById('docList');
+
+function renderFolderSelect(){
+  if (!folderSelect) return;
+  const folders = loadFolders();
+  folderSelect.innerHTML = '';
+  if (!folders.length) { folders.push('Général'); saveFolders(folders); }
+  folders.forEach(name=>{
+    const opt = document.createElement('option');
+    opt.value = name; opt.textContent = name;
+    folderSelect.appendChild(opt);
+  });
+  if (!STATE_DOCS.folder || !folders.includes(STATE_DOCS.folder)) STATE_DOCS.folder = folders[0];
+  folderSelect.value = STATE_DOCS.folder;
+}
+async function renderDocs(){
+  if (!docList) return;
+  renderFolderSelect();
+  const files = await idbListFiles(STATE_DOCS.folder);
+  docList.innerHTML = '';
+  files.sort((a,b)=> b.ts - a.ts);
+  files.forEach(f=>{
+    const li = document.createElement('li'); li.className = 'item';
+    const when = new Date(f.ts).toLocaleString('fr-FR');
+    li.innerHTML = `
+      <div>
+        <div class="name">${f.name}</div>
+        <div class="who">${(f.size/1024).toFixed(1)} Ko · ${f.type || 'fichier'} · ${when}</div>
+      </div>
+      <div class="spacer"></div>
+      <button class="ghost dl">Télécharger</button>
+      <button class="del">Suppr</button>
+    `;
+    li.querySelector('.dl')?.addEventListener('click', ()=> idbDownloadFile(f.id));
+    li.querySelector('.del')?.addEventListener('click', async ()=>{
+      if (!confirm('Supprimer ce fichier ?')) return;
+      await idbDeleteFile(f.id);
+      renderDocs();
+    });
+    docList.appendChild(li);
+  });
+  if (!files.length){
+    const li = document.createElement('li'); li.className = 'item';
+    li.innerHTML = `<div><strong>Aucun fichier</strong><div class="who">Ajoute des fichiers au dossier "${STATE_DOCS.folder}"</div></div>`;
+    docList.appendChild(li);
+  }
+}
+createFolderBtn?.addEventListener('click', ()=>{
+  const name = (newFolderName?.value || '').trim();
+  if (!name) return alert('Nom de dossier vide');
+  const folders = loadFolders();
+  if (folders.includes(name)) return alert('Ce dossier existe déjà');
+  folders.push(name); saveFolders(folders);
+  newFolderName.value = '';
+  STATE_DOCS.folder = name;
+  renderDocs();
+});
+deleteFolderBtn?.addEventListener('click', async ()=>{
+  const cur = STATE_DOCS.folder;
+  if (!cur) return;
+  if (!confirm(`Supprimer le dossier "${cur}" et tous ses fichiers ?`)) return;
+  const files = await idbListFiles(cur);
+  for (const f of files) await idbDeleteFile(f.id);
+  const folders = loadFolders().filter(n => n !== cur);
+  saveFolders(folders);
+  STATE_DOCS.folder = folders[0] || null;
+  renderDocs();
+});
+folderSelect?.addEventListener('change', ()=>{
+  STATE_DOCS.folder = folderSelect.value || null;
+  renderDocs();
+});
+uploadDocBtn?.addEventListener('click', async ()=>{
+  if (!STATE_DOCS.folder) { alert('Crée ou choisis un dossier'); return; }
+  if (!docFileInput?.files?.length){ alert('Choisis un ou plusieurs fichiers'); return; }
+  const files = Array.from(docFileInput.files);
+  for (const f of files) await idbAddFile(STATE_DOCS.folder, f);
+  docFileInput.value = '';
+  renderDocs();
+});
+exportFolderBtn?.addEventListener('click', async ()=>{
+  if (!STATE_DOCS.folder) return;
+  const files = await idbListFiles(STATE_DOCS.folder);
+  if (!files.length) { alert('Aucun fichier à exporter'); return; }
+
+  // Création d’un .tar simple (compatible Safari iOS)
+  function pad(str,len){ return (str + '\0'.repeat(len)).slice(0,len); }
+  function tarHeader(name, size){
+    const buf = new Uint8Array(512);
+    const enc = new TextEncoder();
+    buf.set(enc.encode(pad(name,100)),0);
+    buf.set(enc.encode(pad('0000777',8)),100);
+    buf.set(enc.encode(pad('0000000',8)),108);
+    buf.set(enc.encode(pad('0000000',8)),116);
+    buf.set(enc.encode(pad(size.toString(8),12)),124);
+    buf.set(enc.encode(pad(Math.floor(Date.now()/1000).toString(8),12)),136);
+    buf[156] = '0'.charCodeAt(0);
+    let sum = 0; for(let i=0;i<512;i++) sum += buf[i];
+    buf.set(enc.encode(pad(sum.toString(8),8)),148);
+    return buf;
+  }
+  function tarPad(n){ return new Uint8Array((512 - (n % 512)) % 512); }
+
+  const parts = [];
+  for (const f of files){
+    const b = f.blob;
+    parts.push(tarHeader(f.name, b.size));
+    parts.push(new Uint8Array(await b.arrayBuffer()));
+    parts.push(tarPad(b.size));
+  }
+  parts.push(new Uint8Array(512));
+  parts.push(new Uint8Array(512));
+  const tarBlob = new Blob(parts, {type:'application/x-tar'});
+  const url = URL.createObjectURL(tarBlob);
+  const a = document.createElement('a'); a.href = url; a.download = `${STATE_DOCS.folder}.tar`; a.click();
+  setTimeout(()=> URL.revokeObjectURL(url), 2000);
+});
 
 // ===== Dashboard numbers =====
 function updateDashboard(){
@@ -511,77 +761,9 @@ function updateDashboard(){
   if (el) el.textContent = next ? `${next.title} -- ${new Date(next.date+'T'+(next.time||'09:00')).toLocaleString('fr-FR')}` : 'Pas d’évènement';
 }
 
-// ===== Init =====
-(function init(){
-  renderTasks(); renderBudget(); renderNotes(); updateDashboard();
-  const now = new Date(); calMonth = now.getMonth(); calYear = now.getFullYear();
-  renderEvents(); syncFromWorker();
-})();
-
-// ===== MÉTÉO (Open-Meteo) =====
-// Exemple: latitude/longitude de Maché (Vendée)
-const LAT = 46.747;
-const LON = -1.721;
-
-// Sélecteurs
-const wxTile   = document.getElementById('wxTile');
-const wxEmoji  = document.getElementById('wxEmoji');
-const wxTemp   = document.getElementById('wxTemp');
-const wxDesc   = document.getElementById('wxDesc');
-const wxPlace  = document.getElementById('wxPlace');
-const wxDaily  = document.getElementById('wxDaily');
-
-// Codes météo → Emoji + texte
-function codeToWeather(code){
-  const map = {
-    0:["☀️","Ciel dégagé"], 1:["🌤️","Peu nuageux"], 2:["⛅","Partiellement nuageux"], 3:["☁️","Couvert"],
-    45:["🌫️","Brouillard"], 48:["🌫️","Brouillard givrant"],
-    51:["🌦️","Bruine légère"], 53:["🌦️","Bruine"], 55:["🌦️","Bruine forte"],
-    61:["🌧️","Pluie légère"], 63:["🌧️","Pluie"], 65:["🌧️","Pluie forte"],
-    71:["🌨️","Neige légère"], 73:["🌨️","Neige"], 75:["❄️","Neige forte"],
-    95:["⛈️","Orage"], 96:["⛈️","Orage avec grêle"], 99:["⛈️","Orage fort grêle"]
-  };
-  return map[code] || ["❔","Indéfini"];
-}
-
-async function loadWeather(){
-  try{
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,weathercode&daily=temperature_2m_max,temperature_2m_min,weathercode&timezone=Europe%2FParis`;
-    const r = await fetch(url);
-    if(!r.ok) throw new Error("HTTP " + r.status);
-    const data = await r.json();
-
-    // météo actuelle
-    const cur = data.current;
-    const [emo,txt] = codeToWeather(cur.weathercode);
-    if(wxEmoji) wxEmoji.textContent = emo;
-    if(wxTemp)  wxTemp.textContent  = `${Math.round(cur.temperature_2m)}°C`;
-    if(wxDesc)  wxDesc.textContent  = txt;
-    if(wxTile)  wxTile.textContent  = `${Math.round(cur.temperature_2m)}°C · ${txt}`;
-    if(wxPlace) wxPlace.textContent = "Maché, Vendée";
-
-    // prévisions quotidiennes
-    if(wxDaily){
-      wxDaily.innerHTML = '';
-      data.daily.time.forEach((d,i)=>{
-        const [emo2,txt2] = codeToWeather(data.daily.weathercode[i]);
-        const li = document.createElement('li');
-        li.className='item';
-        li.innerHTML = `<div><strong>${new Date(d).toLocaleDateString('fr-FR',{weekday:'short', day:'2-digit', month:'2-digit'})}</strong>
-                        <div class="who">${txt2}</div></div>
-                        <div class="spacer"></div>
-                        <div>${emo2} ${Math.round(data.daily.temperature_2m_min[i])}° / ${Math.round(data.daily.temperature_2m_max[i])}°</div>`;
-        wxDaily.appendChild(li);
-      });
-    }
-
-  }catch(e){
-    console.error("Météo:",e);
-    if(wxTile) wxTile.textContent="Météo indisponible";
-    if(wxDesc) wxDesc.textContent="Erreur";
-  }
-}
-
-// Chargement initial + refresh toutes les 2h
-loadWeather();
-setInterval(loadWeather, 2*60*60*1000);
+// ===== Initial render =====
+renderTasks();
+renderBudget();
+renderNotes();
+renderDocs();
+updateDashboard();

@@ -64,10 +64,10 @@
           <div class="subtitle" id="wxTile">Chargement…</div>
         </button>
 
-        <button class="tile" data-external="docs">
-          <div class="icon">📁</div>
-          <div class="title">Documents</div>
-          <div class="subtitle">Stockez vos fichiers</div>
+        <button class="tile" data-tab="docs">
+        <div class="icon">📁</div>
+        <div class="title">Documents</div>
+        <div class="subtitle">Dossiers & fichiers locaux</div>
         </button>
 
         <button class="tile" data-external="messages">
@@ -196,6 +196,30 @@
     <!-- Liste des événements -->
     <ul id="eventList" class="list"></ul>
   </section>
+  
+  <!-- Documents -->
+<section id="docs" class="panel" role="tabpanel">
+  <h2>Documents</h2>
+
+  <!-- Barre dossiers -->
+  <div class="row" style="flex-wrap:wrap; gap:10px">
+    <input id="newFolderName" type="text" placeholder="Nom du dossier (ex: École)" style="flex:1 1 260px">
+    <button id="createFolderBtn">Créer dossier</button>
+    <div class="spacer"></div>
+    <select id="folderSelect" style="max-width:220px"></select>
+    <button id="deleteFolderBtn" class="ghost" title="Supprimer le dossier courant">Suppr dossier</button>
+  </div>
+
+  <!-- Fichiers du dossier courant -->
+  <div class="row" style="flex-wrap:wrap; gap:10px">
+    <input id="docFile" type="file" multiple>
+    <button id="uploadDocBtn" class="secondary">Ajouter au dossier</button>
+    <div class="spacer"></div>
+    <button id="exportFolderBtn" class="ghost" title="Exporter tous les fichiers du dossier en .zip">Exporter .zip</button>
+  </div>
+
+  <ul id="docList" class="list"></ul>
+</section>
 
   <!-- Messages (chat + fichiers) -->
   <section id="chat" class="panel" role="tabpanel">
