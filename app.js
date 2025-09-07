@@ -179,11 +179,6 @@ if (!Array.isArray(state.events)) state.events = [];
 const eventForm = $('#eventForm'), eventTitle = $('#eventTitle'), eventDate = $('#eventDate'), eventTime = $('#eventTime');
 const eventList = $('#eventList');
 
-// URLs Worker
-const SUB_URL = 'https://family-app.teiki5320.workers.dev/calendar.ics?token=Partenaire85/'; // (utilisé seulement pour info)
-const WORKER_CAL_ADD  = `${WORKER_URL}/cal/add`;
-const WORKER_CAL_LIST = `${WORKER_URL}/cal/list`;
-
 // --- Helpers sélection jour
 function todayISO(){
   const d = new Date();
