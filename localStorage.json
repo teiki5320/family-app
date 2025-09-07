@@ -1,3 +1,3 @@
 {
-  "familyApp.v1" : "{\"tasks\":[],\"tx\":[],\"notes\":\"\",\"events\":[{\"title\":\"RDV pédiatre\",\"date\":\"2025-09-10\",\"time\":\"14:30\",\"place\":\"Clinique ABC\",\"category\":\"Santé\",\"note\":\"Carnet de santé\",\"remoteId\":\"1757262619777-ppxhkr\"},{\"title\":\"azerty test\",\"date\":\"2025-09-17\",\"time\":\"09:00\",\"place\":\"Maché\",\"category\":\"Autre\",\"note\":\"test 24\",\"remoteId\":\"1757263777575-an2s7c\"},{\"title\":\"test azerty\",\"date\":\"2025-09-18\",\"time\":\"09:00\",\"place\":\"maché\",\"category\":\"Autre\",\"note\":\"\",\"remoteId\":\"1757270757715-zvhsrp\"}]}"
+  "familyApp.v1" : "{\"tasks\":[],\"tx\":[],\"notes\":\"\",\"events\":[]}"
 }

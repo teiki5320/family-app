@@ -14,29 +14,32 @@ try {
 function save(){ localStorage.setItem(KEY, JSON.stringify(state)); }
 function fmtEUR(x){ return (x||0).toLocaleString('fr-FR',{style:'currency',currency:'EUR'}); }
 function pad(n){ return String(n).padStart(2,'0'); }
+function escapeHTML(s){
+  return String(s ?? '')
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
+function linkify(t){ return escapeHTML(t).replace(/https?:\/\/\S+/g, m => `<a href="${m}" target="_blank" rel="noopener">${m}</a>`); }
 
-// ===== Tabs (ignore le lien externe "Menu") =====
+// ===== Onglets (ignore le lien externe "Menu") =====
 $$('.tab').forEach(btn=>{
   if (btn.id === 'menuTab') return;
   btn.addEventListener('click', ()=>{
     $$('.tab').forEach(b=>b.classList.remove('active'));
     $$('.panel').forEach(p=>p.classList.remove('active'));
     btn.classList.add('active');
-    $('#'+btn.dataset.tab)?.classList.add('active');
+    const panel = $('#'+btn.dataset.tab);
+    if (panel) panel.classList.add('active');
   });
 });
 function goToTab(id){
   const tab = document.querySelector(`.tab[data-tab="${id}"]`);
-  if (!tab) return; tab.click();
+  if (!tab) return;
+  tab.click();
 }
-
-// Quand on ouvre l'onglet Calendrier : on remet les filtres à zéro
-document.querySelector('.tab[data-tab="calendar"]')?.addEventListener('click', ()=>{
-  selectedDate = null; // enlève le filtre par jour
-  const f = document.getElementById('calFilter');  if (f) f.value = '*';
-  const s = document.getElementById('calSearch');  if (s) s.value = '';
-  renderEvents();
-});
 
 // ===== MENU (Clic&miam du jour) =====
 const MENU_PREFIX = "https://clicetmiam.fr/mesmenus/5387/5765/";
@@ -53,7 +56,7 @@ function buildMenuUrl(d){
 $('#menuTab')?.addEventListener('click', (e)=>{ e.preventDefault(); window.open(buildMenuUrl(new Date()), '_blank'); });
 $('#tileMenu')?.addEventListener('click', ()=> window.open(buildMenuUrl(new Date()), '_blank'));
 
-// ===== Dashboard interactions =====
+// ===== Dashboard: tuiles =====
 document.querySelectorAll('.tile[data-tab]')?.forEach(t=> t.addEventListener('click', ()=> goToTab(t.dataset.tab)));
 document.querySelectorAll('.tile[data-external]')?.forEach(t=>{
   t.addEventListener('click', ()=>{
@@ -76,8 +79,8 @@ function renderTasks(){
     li.innerHTML = `
       <input type="checkbox" ${t.done ? 'checked' : ''} aria-label="Terminer">
       <div>
-        <div>${t.text}</div>
-        <div class="who">${t.who || 'Tous'}</div>
+        <div>${escapeHTML(t.text)}</div>
+        <div class="who">${escapeHTML(t.who || 'Tous')}</div>
       </div>
       <div class="spacer"></div>
       <button class="del" aria-label="Supprimer">Suppr</button>
@@ -109,7 +112,8 @@ function renderBudget(){
     const li = document.createElement('li');
     li.className = 'item';
     li.innerHTML = `
-      <div><strong>${t.label}</strong><div class="who">${new Date(t.ts).toLocaleDateString('fr-FR')}</div></div>
+      <div><strong>${escapeHTML(t.label)}</strong>
+      <div class="who">${new Date(t.ts).toLocaleDateString('fr-FR')}</div></div>
       <div class="spacer"></div>
       <div>${t.type==='+'?'+':''}${fmtEUR(t.amount)}</div>
       <button class="del">Suppr</button>
@@ -176,30 +180,26 @@ $('#importFile')?.addEventListener('change', async (e)=>{
 
 // ===== Chat + Fichiers (Cloudflare Worker) =====
 const WORKER_URL = 'https://family-app.teiki5320.workers.dev'; // ← ton Worker
-const SECRET = 'Partenaire85/';                                // ← même valeur que dans Cloudflare
+const SECRET = 'Partenaire85/';                                // ← mets la même valeur que dans Cloudflare
 const ROOM   = 'family';
 
-// URLs calendrier côté Worker (une seule fois dans le fichier)
-const SUB_URL         = `${WORKER_URL}/calendar.ics?token=Partenaire85/`; // pour abonnements Apple/Google
+// URLs calendrier côté Worker
+const SUB_URL         = `${WORKER_URL}/calendar.ics?token=Partenaire85/`; // abonnement Apple/Google (info)
 const WORKER_CAL_ADD  = `${WORKER_URL}/cal/add`;
 const WORKER_CAL_LIST = `${WORKER_URL}/cal/list`;
 
-const chatList   = document.getElementById('chatList');
-const chatInput  = document.getElementById('chatInput');
-const chatSend   = document.getElementById('chatSend');
-const chatFile   = document.getElementById('chatFile');
-const chatUpload = document.getElementById('chatUpload');
-const chatName   = document.getElementById('chatName');
+const chatList   = $('#chatList');
+const chatInput  = $('#chatInput');
+const chatSend   = $('#chatSend');
+const chatFile   = $('#chatFile');
+const chatUpload = $('#chatUpload');
+const chatName   = $('#chatName');
 
 const NAME_KEY = 'familyApp.chatName';
 if (chatName) chatName.value = localStorage.getItem(NAME_KEY) || '';
 chatName?.addEventListener('change', ()=> localStorage.setItem(NAME_KEY, (chatName.value||'').trim()));
 
 let lastTs = 0;
-function escapeHTML(s){ return (s||'').replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&gt;','&quot;':'&quot;',"'" :'&#39;' }[c])); }
-function linkify(t){ return escapeHTML(t).replace(/https?:\/\/\S+/g, m => `<a href="${m}" target="_blank" rel="noopener">${m}</a>`); }
-function scrollBottom(){ if (chatList) chatList.scrollTop = chatList.scrollHeight; }
-
 function renderMessages(msgs){
   if(!chatList) return;
   for(const m of msgs){
@@ -213,7 +213,7 @@ function renderMessages(msgs){
     chatList.appendChild(el);
     lastTs = Math.max(lastTs, m.ts);
   }
-  scrollBottom();
+  if (chatList) chatList.scrollTop = chatList.scrollHeight;
 }
 async function refreshMessages(){
   try{
@@ -228,7 +228,6 @@ async function sendMessage(){
   const text = (chatInput?.value || '').trim();
   const author = (chatName?.value || 'Anonyme').trim() || 'Anonyme';
 
-  // 1) Fichier d'abord (le Worker poste un 📎 automatique)
   if (hasFile){
     const url = await uploadFile();
     if (url && text) {
@@ -245,7 +244,6 @@ async function sendMessage(){
     return;
   }
 
-  // 2) Message texte
   if (!text) return;
   chatInput.value = '';
   try{
@@ -305,23 +303,20 @@ chatSend?.addEventListener('click', sendMessage);
 chatInput?.addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); }});
 refreshMessages(); setInterval(refreshMessages, 4000);
 
-// ===== CALENDRIER local + ICS (piloté par le Worker) =====
+// ===== CALENDRIER (local + synchro Worker/ICS) =====
 if (!Array.isArray(state.events)) state.events = [];
 const eventForm = $('#eventForm'), eventTitle = $('#eventTitle'), eventDate = $('#eventDate'), eventTime = $('#eventTime');
 
-// Helpers sélection jour
 function todayISO(){
   const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 }
 let selectedDate = todayISO();
-
 let calMonth = new Date().getMonth();
 let calYear  = new Date().getFullYear();
 
 function renderMonth(y,m){
-  const grid = document.getElementById('calGrid');
-  if(!grid) return;
+  const grid = $('#calGrid'); if(!grid) return;
   grid.innerHTML='';
 
   const first = new Date(y,m,1);
@@ -329,14 +324,14 @@ function renderMonth(y,m){
   const daysInMonth = new Date(y,m+1,0).getDate();
 
   const monthLabel = new Intl.DateTimeFormat('fr-FR',{month:'long',year:'numeric'}).format(first);
-  document.getElementById('calMonthLabel')?.textContent = monthLabel;
+  $('#calMonthLabel') && ($('#calMonthLabel').textContent = monthLabel);
 
   for(let i=0;i<start;i++){ grid.appendChild(document.createElement('div')); }
 
   for(let d=1; d<=daysInMonth; d++){
     const cell = document.createElement('div');
     cell.className='day';
-    const ds = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const ds = `${y}-${pad(m+1)}-${pad(d)}`;
 
     if (ds === todayISO())   cell.classList.add('today');
     if (ds === selectedDate) cell.classList.add('selected');
@@ -360,16 +355,15 @@ function renderMonth(y,m){
   }
 }
 
-// Nav mois
-document.getElementById('calPrev')?.addEventListener('click', ()=>{
+$('#calPrev')?.addEventListener('click', ()=>{
   if(--calMonth<0){ calMonth=11; calYear--; }
   renderMonth(calYear,calMonth);
 });
-document.getElementById('calNext')?.addEventListener('click', ()=>{
+$('#calNext')?.addEventListener('click', ()=>{
   if(++calMonth>11){ calMonth=0; calYear++; }
   renderMonth(calYear,calMonth);
 });
-document.getElementById('calToday')?.addEventListener('click', ()=>{
+$('#calToday')?.addEventListener('click', ()=>{
   const now = new Date();
   calMonth = now.getMonth();
   calYear  = now.getFullYear();
@@ -378,16 +372,21 @@ document.getElementById('calToday')?.addEventListener('click', ()=>{
   renderEvents();
 });
 
-// Filtres
-document.getElementById('calFilter')?.addEventListener('change', renderEvents);
-document.getElementById('calSearch')?.addEventListener('input', renderEvents);
+// Remise à zéro des filtres quand on va sur l’onglet calendrier
+document.querySelector('.tab[data-tab="calendar"]')?.addEventListener('click', ()=>{
+  selectedDate = null;
+  const f = $('#calFilter');  if (f) f.value = '*';
+  const s = $('#calSearch');  if (s) s.value = '';
+  renderEvents();
+});
 
-// Affichage + suppression (local + Worker)
-renderEvents = function(){
-  const filter = document.getElementById('calFilter')?.value || '*';
-  const search = (document.getElementById('calSearch')?.value||'').toLowerCase();
-  const list = document.getElementById('eventList');
-  if(!list) return;
+$('#calFilter')?.addEventListener('change', renderEvents);
+$('#calSearch')?.addEventListener('input', renderEvents);
+
+function renderEvents(){
+  const filter = $('#calFilter')?.value || '*';
+  const search = ($('#calSearch')?.value||'').toLowerCase();
+  const list = $('#eventList'); if(!list) return;
   list.innerHTML='';
 
   const sel = selectedDate;
@@ -404,8 +403,8 @@ renderEvents = function(){
     const when = `${ev.date} ${ev.time||''}`.trim();
     li.innerHTML = `
       <div>
-        <strong>${ev.title}</strong>
-        <div class="who">${when}${ev.place?` · ${ev.place}`:''} [${ev.category||'Autre'}]</div>
+        <strong>${escapeHTML(ev.title)}</strong>
+        <div class="who">${escapeHTML(when)}${ev.place?` · ${escapeHTML(ev.place)}`:''} [${escapeHTML(ev.category||'Autre')}]</div>
       </div>
       <div class="spacer"></div>
       <button class="del" aria-label="Supprimer">Suppr</button>
@@ -418,7 +417,7 @@ renderEvents = function(){
             method:'POST',
             headers:{ Authorization:'Bearer '+SECRET }
           });
-        }catch(e){ /* pas bloquant */ }
+        }catch(_e){ /* non bloquant */ }
       }
       const idx = state.events.indexOf(ev);
       if (idx > -1) { state.events.splice(idx,1); save(); renderEvents(); }
@@ -438,9 +437,8 @@ renderEvents = function(){
 
   renderMonth(calYear,calMonth);
   updateDashboard();
-};
+}
 
-// Ajout d'évènement (avec remoteId du Worker)
 eventForm?.addEventListener('submit', async (e)=>{
   e.preventDefault();
   const title = (eventTitle.value||'').trim();
@@ -450,18 +448,16 @@ eventForm?.addEventListener('submit', async (e)=>{
     title,
     date: eventDate.value,
     time: eventTime?.value || '09:00',
-    place: (document.getElementById('eventPlace')?.value || ''),
-    category: (document.getElementById('eventCategory')?.value || 'Autre'),
-    note: (document.getElementById('eventNote')?.value || '')
+    place: ($('#eventPlace')?.value || ''),
+    category: ($('#eventCategory')?.value || 'Autre'),
+    note: ($('#eventNote')?.value || '')
   };
 
-  // 1) local
   state.events.push(ev);
   save();
   renderEvents();
   eventForm.reset();
 
-  // 2) Worker
   try{
     const r = await fetch(WORKER_CAL_ADD, {
       method:'POST',
@@ -473,10 +469,9 @@ eventForm?.addEventListener('submit', async (e)=>{
       const last = state.events[state.events.length - 1];
       if (last === ev) { ev.remoteId = data.id; save(); }
     }
-  }catch(e){ /* silencieux si hors-ligne */ }
+  }catch(_e){}
 });
 
-// Sync initial depuis le Worker (récupérer remoteId / compléter local)
 async function syncFromWorker(){
   try{
     const r = await fetch(WORKER_CAL_LIST);
@@ -499,17 +494,8 @@ async function syncFromWorker(){
       }
     }
     if (changed){ save(); renderEvents(); }
-  }catch(e){}
+  }catch(_e){}
 }
-
-// init calendrier
-(function initCalendar(){
-  const now = new Date();
-  calMonth = now.getMonth();
-  calYear  = now.getFullYear();
-  renderEvents();
-  syncFromWorker();
-})();
 
 // ===== Dashboard numbers =====
 function updateDashboard(){
@@ -525,5 +511,9 @@ function updateDashboard(){
   if (el) el.textContent = next ? `${next.title} -- ${new Date(next.date+'T'+(next.time||'09:00')).toLocaleString('fr-FR')}` : 'Pas d’évènement';
 }
 
-// ===== Initial render =====
-renderTasks(); renderBudget(); renderNotes(); updateDashboard();
+// ===== Init =====
+(function init(){
+  renderTasks(); renderBudget(); renderNotes(); updateDashboard();
+  const now = new Date(); calMonth = now.getMonth(); calYear = now.getFullYear();
+  renderEvents(); syncFromWorker();
+})();
