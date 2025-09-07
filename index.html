@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Famille · App</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="app-header">
+  <h1>📒 Famille</h1>
+  <button id="shareBtn" class="ghost" title="Exporter toutes les données">↥ Export</button>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button class="tab active" data-tab="home" aria-selected="true">Accueil</button>
+  <button class="tab" data-tab="tasks">Tâches</button>
+  <button class="tab" data-tab="budget">Budget</button>
+  <button class="tab" data-tab="notes">Notes</button>
+  <button class="tab" data-tab="calendar">Calendrier</button>
+  <button class="tab" data-tab="chat">Messages</button>
+  <a id="menuTab" class="tab" href="#" target="_blank" rel="noopener">Menu</a>
+</nav>
+
+<main>
+  <!-- Accueil / Dashboard -->
+  <section id="home" class="panel active" role="tabpanel">
+    <div class="dashboard">
+      <div class="hero">
+        <div class="hero-top">
+          <div class="chip">INFO</div>
+          <button class="hero-gear" title="Paramètres (à venir)">⚙️</button>
+        </div>
+        <h3>Bienvenue, famille 👋</h3>
+        <p class="hero-text">Accès rapide à vos listes, agenda, budgets, documents, messages…</p>
+        <div class="hero-dots"><span class="dot active"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+      </div>
+
+      <div class="tiles">
+        <button class="tile" data-tab="tasks">
+          <div class="icon">📝</div>
+          <div class="title">Listes</div>
+          <div class="subtitle"><span id="dashTasksCount">0</span> éléments</div>
+        </button>
+
+        <button class="tile" data-tab="calendar">
+          <div class="icon">📅</div>
+          <div class="title">Calendrier</div>
+          <div class="subtitle" id="dashNextEvent">Pas d’évènement</div>
+        </button>
+
+        <button class="tile" data-tab="budget">
+          <div class="icon">🐷</div>
+          <div class="title">Budget</div>
+          <div class="subtitle">Solde : <span id="dashBalance">0,00 €</span></div>
+        </button>
+
+        <button class="tile" data-external="docs">
+          <div class="icon">📁</div>
+          <div class="title">Documents</div>
+          <div class="subtitle">Stockez vos fichiers</div>
+        </button>
+
+        <button class="tile" data-external="messages">
+          <div class="icon">💬</div>
+          <div class="title">Messages</div>
+          <div class="subtitle">Chat familial</div>
+        </button>
+
+        <button class="tile" id="tileMenu">
+          <div class="icon">🍎</div>
+          <div class="title">Menu</div>
+          <div class="subtitle">Clic&miam du jour</div>
+        </button>
+      </div>
+
+      <div class="row">
+        <button id="importBtn" class="secondary">Importer des données</button>
+        <input id="importFile" type="file" accept="application/json" hidden>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tâches -->
+  <section id="tasks" class="panel" role="tabpanel">
+    <h2>Tâches</h2>
+    <form id="taskForm" class="row">
+      <input id="taskInput" type="text" placeholder="Ex: Acheter du lait…" required>
+      <select id="taskWho">
+        <option value="Tous">Tous</option>
+        <option value="Jean">Jean</option>
+        <option value="Laura">Laura</option>
+      </select>
+      <button type="submit">Ajouter</button>
+    </form>
+    <ul id="taskList" class="list"></ul>
+    <div class="row row-end">
+      <button id="clearDone" class="ghost">Effacer terminées</button>
+    </div>
+  </section>
+
+  <!-- Budget -->
+  <section id="budget" class="panel" role="tabpanel">
+    <h2>Budget</h2>
+    <form id="txForm" class="row">
+      <input id="txLabel" type="text" placeholder="Libellé (ex: Courses)" required>
+      <input id="txAmount" type="number" step="0.01" placeholder="Montant (€)" required>
+      <select id="txType">
+        <option value="-" selected>Dépense</option>
+        <option value="+">Revenu</option>
+      </select>
+      <button type="submit">Ajouter</button>
+    </form>
+    <div class="cards">
+      <div class="card"><div class="muted">Solde</div><div id="balance" class="big">0,00 €</div></div>
+      <div class="card"><div class="muted">Dépenses</div><div id="out" class="big">0,00 €</div></div>
+      <div class="card"><div class="muted">Revenus</div><div id="in" class="big">0,00 €</div></div>
+    </div>
+    <ul id="txList" class="list"></ul>
+  </section>
+
+  <!-- Notes -->
+  <section id="notes" class="panel" role="tabpanel">
+    <h2>Notes</h2>
+    <textarea id="notesArea" rows="12" placeholder="Tes notes ici…"></textarea>
+    <div class="row row-end">
+      <span class="muted" id="notesSaved">Enregistré ✔︎</span>
+    </div>
+  </section>
+
+  <!-- Calendrier -->
+ <!-- Calendrier -->
+<section id="calendar" class="panel" role="tabpanel">
+  <h2>Calendrier familial</h2>
+
+  <!-- Barre de contrôle -->
+  <div class="row" style="flex-wrap:wrap;gap:10px;align-items:center">
+    <div class="cal-controls">
+      <button id="calPrev" class="ghost">◀︎</button>
+      <div id="calMonthLabel" class="cal-month">--</div>
+      <button id="calNext" class="ghost">▶︎</button>
+      <button id="calToday" class="secondary">Aujourd’hui</button>
+    </div>
+    <div class="spacer"></div>
+    <input id="calSearch" type="search" placeholder="Rechercher…" style="max-width:260px">
+    <select id="calFilter" style="max-width:180px">
+      <option value="*">Toutes catégories</option>
+      <option value="Famille">Famille</option>
+      <option value="École">École</option>
+      <option value="Santé">Santé</option>
+      <option value="Autre">Autre</option>
+    </select>
+  </div>
+
+  <!-- Grille mensuelle -->
+  <div id="calGrid" class="cal-grid"></div>
+
+  <!-- Formulaire d'ajout -->
+  <form id="eventForm" class="row" style="flex-wrap:wrap; gap:10px; margin-top:15px">
+    <input id="eventTitle"  type="text"  placeholder="Titre (ex: RDV pédiatre)" required style="flex:1 1 260px">
+    <input id="eventDate"   type="date"   required style="flex:0 0 180px">
+    <input id="eventTime"   type="time"   value="09:00" style="flex:0 0 140px">
+    <input id="eventPlace"  type="text"   placeholder="Lieu (ex: Clinique ABC)" style="flex:1 1 260px">
+    <select id="eventCategory" style="flex:0 0 180px">
+      <option value="Famille">Famille</option>
+      <option value="École">École</option>
+      <option value="Santé">Santé</option>
+      <option value="Autre" selected>Autre</option>
+    </select>
+    <textarea id="eventNote" rows="2" placeholder="Note / description…" style="flex:1 1 100%"></textarea>
+    <div class="spacer"></div>
+    <button type="submit">Ajouter</button>
+  </form>
+
+  <!-- Liste des événements -->
+  <ul id="eventList" class="list"></ul>
+</section>
+
+  <!-- Messages (chat + fichiers) -->
+  <section id="chat" class="panel" role="tabpanel">
+    <h2>Chat familial</h2>
+
+    <div class="row">
+      <input id="chatName" type="text" placeholder="Ton prénom (ex: Jean)">
+      <div class="spacer"></div>
+      <small class="muted">Privé • messages & fichiers 30 jours</small>
+    </div>
+
+    <div id="chatList" class="chat-messages"></div>
+
+    <div class="row">
+      <textarea id="chatInput" rows="2" placeholder="Écris un message… (Entrée = envoyer)"></textarea>
+    </div>
+
+    <div class="row">
+      <input id="chatFile" type="file">
+      <button id="chatUpload" class="ghost">Joindre</button>
+      <div class="spacer"></div>
+      <button id="chatSend">Envoyer</button>
+    </div>
+  </section>
+</main>
+
+<footer class="app-footer">
+  <small>App locale -- modifie librement dans Textastic ✦</small>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
