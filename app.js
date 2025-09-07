@@ -177,9 +177,93 @@ $('#importFile')?.addEventListener('change', async (e)=>{
 // ===== CALENDRIER local + ICS =====
 if (!Array.isArray(state.events)) state.events = [];
 const eventForm = $('#eventForm'), eventTitle = $('#eventTitle'), eventDate = $('#eventDate'), eventTime = $('#eventTime');
-const eventList = $('#eventList'), icsGenerateBtn = $('#icsGenerate'), icsDownloadBtn = $('#icsDownload'), icsPreview = $('#icsPreview');
+const eventList = $('#eventList');
 
-// [CAL] Affichage liste avec filtre jour/catégorie/recherche + suppression Worker
+// URLs Worker
+const SUB_URL = 'https://family-app.teiki5320.workers.dev/calendar.ics?token=Partenaire85/'; // (utilisé seulement pour info)
+const WORKER_CAL_ADD  = `${WORKER_URL}/cal/add`;
+const WORKER_CAL_LIST = `${WORKER_URL}/cal/list`;
+
+// --- Helpers sélection jour
+function todayISO(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+let selectedDate = todayISO();
+
+// --- Grille mensuelle
+let calMonth = new Date().getMonth();
+let calYear  = new Date().getFullYear();
+
+function renderMonth(y,m){
+  const grid = document.getElementById('calGrid');
+  if(!grid) return;
+  grid.innerHTML='';
+
+  const first = new Date(y,m,1);
+  const start = first.getDay()===0 ? 6 : first.getDay()-1; // lundi=0
+  const daysInMonth = new Date(y,m+1,0).getDate();
+
+  // label
+  const monthLabel = new Intl.DateTimeFormat('fr-FR',{month:'long',year:'numeric'}).format(first);
+  document.getElementById('calMonthLabel')?.textContent = monthLabel;
+
+  // cases vides avant le 1er
+  for(let i=0;i<start;i++){ grid.appendChild(document.createElement('div')); }
+
+  // jours
+  for(let d=1; d<=daysInMonth; d++){
+    const cell = document.createElement('div');
+    cell.className='day';
+    const ds = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+
+    if (ds === todayISO())   cell.classList.add('today');
+    if (ds === selectedDate) cell.classList.add('selected');
+
+    cell.innerHTML = `<div class="num">${d}</div>`;
+
+    // pastilles d'évènements
+    const evs = (state.events||[]).filter(ev=>ev.date===ds);
+    evs.forEach(ev=>{
+      const dot=document.createElement('span');
+      dot.className='cal-dot cat-'+(ev.category||'Autre');
+      cell.appendChild(dot);
+    });
+
+    // clic = sélection / dé-sélection du jour
+    cell.addEventListener('click', ()=>{
+      selectedDate = (selectedDate === ds) ? null : ds;
+      renderEvents();
+      renderMonth(calYear, calMonth);
+    });
+
+    grid.appendChild(cell);
+  }
+}
+
+// nav mois
+document.getElementById('calPrev')?.addEventListener('click', ()=>{
+  if(--calMonth<0){ calMonth=11; calYear--; }
+  renderMonth(calYear,calMonth);
+});
+document.getElementById('calNext')?.addEventListener('click', ()=>{
+  if(++calMonth>11){ calMonth=0; calYear++; }
+  renderMonth(calYear,calMonth);
+});
+document.getElementById('calToday')?.addEventListener('click', ()=>{
+  const now = new Date();
+  calMonth = now.getMonth();
+  calYear  = now.getFullYear();
+  selectedDate = todayISO();
+  renderMonth(calYear, calMonth);
+  renderEvents();
+});
+
+// filtre & recherche
+document.getElementById('calFilter')?.addEventListener('change', renderEvents);
+document.getElementById('calSearch')?.addEventListener('input', renderEvents);
+
+// --- Affichage + suppression (local + Worker)
 renderEvents = function(){
   const filter = document.getElementById('calFilter')?.value || '*';
   const search = (document.getElementById('calSearch')?.value||'').toLowerCase();
@@ -187,15 +271,12 @@ renderEvents = function(){
   if(!list) return;
   list.innerHTML='';
 
-  const sel = typeof selectedDate !== 'undefined' ? selectedDate : null;
+  const sel = selectedDate; // peut être null
 
   const events = (state.events||[]).filter(ev=>{
     const byDay  = !sel || ev.date === sel;
     const byCat  = (filter==='*' || ev.category===filter);
-    const byText =
-      (!search ||
-       (ev.title||'').toLowerCase().includes(search) ||
-       (ev.place||'').toLowerCase().includes(search));
+    const byText = (!search || (ev.title||'').toLowerCase().includes(search) || (ev.place||'').toLowerCase().includes(search));
     return byDay && byCat && byText;
   }).sort((a,b)=> (a.date+(a.time||'')).localeCompare(b.date+(b.time||'')));
 
@@ -213,7 +294,6 @@ renderEvents = function(){
 
     // bouton supprimer : Worker + local
     li.querySelector('.del')?.addEventListener('click', async ()=>{
-      // 1) supprime côté Worker si on a un id
       if (ev.remoteId) {
         try{
           await fetch(`${WORKER_URL}/cal/del?id=${encodeURIComponent(ev.remoteId)}`, {
@@ -222,7 +302,6 @@ renderEvents = function(){
           });
         }catch(e){ /* pas bloquant */ }
       }
-      // 2) supprime localement
       const idx = state.events.indexOf(ev);
       if (idx > -1) { state.events.splice(idx,1); save(); renderEvents(); }
     });
@@ -230,7 +309,7 @@ renderEvents = function(){
     list.appendChild(li);
   });
 
-  // si aucun évènement pour ce filtre / jour
+  // message vide
   if (!events.length){
     const li = document.createElement('li');
     li.className = 'item';
@@ -240,11 +319,11 @@ renderEvents = function(){
     list.appendChild(li);
   }
 
-  // rafraîchir la grille et les stats
   renderMonth(calYear,calMonth);
   updateDashboard();
 };
-}
+
+// --- Ajout d'évènement (avec remoteId du Worker)
 eventForm?.addEventListener('submit', async (e)=>{
   e.preventDefault();
   const title = (eventTitle.value||'').trim();
@@ -260,12 +339,12 @@ eventForm?.addEventListener('submit', async (e)=>{
   };
 
   // 1) local
-  state.events.push(ev); 
-  save(); 
-  renderEvents(); 
+  state.events.push(ev);
+  save();
+  renderEvents();
   eventForm.reset();
 
-  // 2) sync vers le Worker (pour le flux ICS)
+  // 2) Worker
   try{
     const r = await fetch(WORKER_CAL_ADD, {
       method:'POST',
@@ -274,56 +353,46 @@ eventForm?.addEventListener('submit', async (e)=>{
     });
     const data = await r.json().catch(()=>null);
     if (data && data.id) {
-      // stocke l'ID distant pour pouvoir supprimer plus tard
       const last = state.events[state.events.length - 1];
-      if (last === ev) { 
-        ev.remoteId = data.id; 
-        save(); 
-      }
+      if (last === ev) { ev.remoteId = data.id; save(); }
     }
   }catch(e){ /* silencieux si hors-ligne */ }
 });
 
-// ICS helpers
-function toICSTime(dateStr, timeStr="09:00"){ // UTC "Z"
-  const [Y,M,D] = dateStr.split('-').map(Number);
-  const [h,m]   = timeStr.split(':').map(Number);
-  const dt = new Date(Date.UTC(Y, M-1, D, h, m, 0));
-  const YYYY = dt.getUTCFullYear(), MM=pad(dt.getUTCMonth()+1), DD=pad(dt.getUTCDate());
-  const HH = pad(dt.getUTCHours()), Min = pad(dt.getUTCMinutes());
-  return `${YYYY}${MM}${DD}T${HH}${Min}00Z`;
+// --- Sync initial depuis le Worker pour récupérer les remoteId manquants
+async function syncFromWorker(){
+  try{
+    const r = await fetch(WORKER_CAL_LIST);
+    const data = await r.json();
+    if (!Array.isArray(data.events)) return;
+    let changed = false;
+
+    for (const w of data.events){
+      let local = state.events.find(e => e.remoteId === w.id) ||
+                  state.events.find(e => e.title===w.title && e.date===w.date && (e.time||'')===(w.time||''));
+      if (!local){
+        state.events.push({
+          title:w.title, date:w.date, time:w.time||'',
+          place:w.place||'', category:w.category||'Autre', note:w.note||'',
+          remoteId:w.id
+        });
+        changed = true;
+      } else if (!local.remoteId){
+        local.remoteId = w.id; changed = true;
+      }
+    }
+    if (changed){ save(); renderEvents(); }
+  }catch(e){}
 }
-function buildICS(events){
+
+// --- init calendrier
+(function initCalendar(){
   const now = new Date();
-  const dtstamp = toICSTime(now.toISOString().slice(0,10), `${pad(now.getHours())}:${pad(now.getMinutes())}`);
-  const lines = [
-    'BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Famille App//local//FR','CALSCALE:GREGORIAN','METHOD:PUBLISH',
-    'X-WR-CALNAME:Calendrier Famille','X-WR-TIMEZONE:Europe/Paris','REFRESH-INTERVAL;VALUE=DURATION:PT1H','X-PUBLISHED-TTL:PT1H'
-  ];
-  for(const ev of events){
-    const uid = `${Math.random().toString(36).slice(2)}@famille.local`;
-    const dtstart = toICSTime(ev.date, ev.time || '09:00');
-    const summary = (ev.title||'Événement').replace(/\r?\n/g,' ');
-    const description = (ev.note||'').replace(/\r?\n/g,' ');
-    lines.push(
-      'BEGIN:VEVENT',`UID:${uid}`,`DTSTAMP:${dtstamp}`,`DTSTART:${dtstart}`,
-      'DURATION:PT1H',`SUMMARY:${summary}`,`DESCRIPTION:${description}`,
-      'BEGIN:VALARM','TRIGGER:-PT30M','ACTION:DISPLAY',`DESCRIPTION:Rappel - ${summary}`,'END:VALARM','END:VEVENT'
-    );
-  }
-  lines.push('END:VCALENDAR'); return lines.join('\r\n');
-}
-function computeICS(){
-  const ics = buildICS(Array.isArray(state.events)? state.events : []);
-  if (icsPreview) icsPreview.value = ics;
-  return ics;
-}
-icsGenerateBtn?.addEventListener('click', ()=>{ const ok = computeICS(); if(ok) alert('ICS généré.'); });
-icsDownloadBtn?.addEventListener('click', ()=>{
-  const ics = computeICS(); if(!ics) return;
-  const file = new File([ics], 'famille.ics', {type:'text/calendar'});
-  const url = URL.createObjectURL(file); const a = document.createElement('a'); a.href=url; a.download='famille.ics'; a.click(); URL.revokeObjectURL(url);
-});
+  calMonth = now.getMonth();
+  calYear  = now.getFullYear();
+  renderEvents();
+  syncFromWorker();
+})();
 
 // ===== Dashboard numbers =====
 function updateDashboard(){
