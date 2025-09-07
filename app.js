@@ -15,36 +15,30 @@ function save(){ localStorage.setItem(KEY, JSON.stringify(state)); }
 function fmtEUR(x){ return (x||0).toLocaleString('fr-FR',{style:'currency',currency:'EUR'}); }
 function pad(n){ return String(n).padStart(2,'0'); }
 
-// ===== Tabs (ignore le lien externe "Menu") =====
-function activateTab(tabBtn){
-  // désactive tout
-  $$('.tab').forEach(b=>b.classList.remove('active'));
-  $$('.panel').forEach(p=>p.classList.remove('active'));
-
-  // active le bouton et son panneau
-  tabBtn.classList.add('active');
-  const id = tabBtn.dataset.tab;
+// ===== Tabs (délégation d'événements) =====
+function showPanel(id){
+  document.querySelectorAll('.tab').forEach(t=> t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p=> p.classList.remove('active'));
+  const btn = document.querySelector(`.tab[data-tab="${id}"]`);
   const panel = document.getElementById(id);
+  if (btn) btn.classList.add('active');
   if (panel) panel.classList.add('active');
 }
-
-$$('.tab').forEach(btn=>{
-  if (btn.id === 'menuTab') return; // le bouton "Menu" ouvre un lien externe
-  btn.addEventListener('click', ()=>{
-    activateTab(btn);
+const tabsBar = document.querySelector('.tabs');
+if (tabsBar){
+  tabsBar.addEventListener('click', (e)=>{
+    const btn = e.target.closest('.tab');
+    if (!btn) return;
+    if (btn.id === 'menuTab') { e.preventDefault(); return; } // lien externe géré à part
+    e.preventDefault();
+    const id = btn.dataset.tab;
+    if (id) showPanel(id);
   });
-});
-
-// API utilitaire
-function goToTab(id){
-  const tab = document.querySelector(`.tab[data-tab="${id}"]`);
-  if (tab) activateTab(tab);
 }
-
-// à l’arrivée, s’assurer que l’onglet initial est bien actif
-(() => {
+function goToTab(id){ if (id) showPanel(id); }
+(function ensureInitialTab(){
   const current = document.querySelector('.tab.active[data-tab]');
-  if (current) activateTab(current);
+  showPanel(current ? current.dataset.tab : 'home');
 })();
 
 // Quand on ouvre l'onglet Calendrier : on remet les filtres à zéro
@@ -52,7 +46,7 @@ document.querySelector('.tab[data-tab="calendar"]')?.addEventListener('click', (
   selectedDate = null;
   const f = document.getElementById('calFilter');  if (f) f.value = '*';
   const s = document.getElementById('calSearch');  if (s) s.value = '';
-  renderEvents();
+  renderEvents?.();
 });
 
 // ===== MENU (Clic&miam du jour) =====
@@ -70,7 +64,7 @@ function buildMenuUrl(d){
 $('#menuTab')?.addEventListener('click', (e)=>{ e.preventDefault(); window.open(buildMenuUrl(new Date()), '_blank'); });
 $('#tileMenu')?.addEventListener('click', ()=> window.open(buildMenuUrl(new Date()), '_blank'));
 
-// ===== Dashboard interactions =====
+// ===== Dashboard interactions (tuiles) =====
 document.querySelectorAll('.tile[data-tab]')?.forEach(t=> t.addEventListener('click', ()=> goToTab(t.dataset.tab)));
 document.querySelectorAll('.tile[data-external]')?.forEach(t=>{
   t.addEventListener('click', ()=>{
@@ -165,8 +159,7 @@ notesArea?.addEventListener('input', ()=>{
 });
 
 // ===== MÉTÉO (Open-Meteo) =====
-// RENSEIGNE ta position ici (lat/lon décimales) :
-const LAT = 46.6403, LON = -1.1616; // Maché, Vendée (exemple)
+const LAT = 46.6403, LON = -1.1616; // adapte à ta ville
 const wxEmoji = $('#wxEmoji'), wxTemp = $('#wxTemp'), wxDesc = $('#wxDesc'), wxTile = $('#wxTile'), wxPlace = $('#wxPlace'), wxDaily = $('#wxDaily');
 
 function codeToWeather(code){
@@ -218,15 +211,15 @@ async function loadWeather(){
   }
 }
 loadWeather();
-setInterval(loadWeather, 2*60*60*1000); // refresh 2h
+setInterval(loadWeather, 2*60*60*1000);
 
 // ===== Chat + Fichiers (Cloudflare Worker) =====
-const WORKER_URL = 'https://family-app.teiki5320.workers.dev'; // ← ton Worker
-const SECRET = 'Partenaire85/';                                // ← même valeur que dans Cloudflare
+const WORKER_URL = 'https://family-app.teiki5320.workers.dev';
+const SECRET = 'Partenaire85/';
 const ROOM   = 'family';
 
 // URLs calendrier côté Worker
-const SUB_URL         = `${WORKER_URL}/calendar.ics?token=Partenaire85/`; // pour abonnements Apple/Google
+const SUB_URL         = `${WORKER_URL}/calendar.ics?token=Partenaire85/`;
 const WORKER_CAL_ADD  = `${WORKER_URL}/cal/add`;
 const WORKER_CAL_LIST = `${WORKER_URL}/cal/list`;
 
@@ -274,7 +267,6 @@ async function sendMessage(){
   const text = (chatInput?.value || '').trim();
   const author = (chatName?.value || 'Anonyme').trim() || 'Anonyme';
 
-  // 1) Fichier d'abord
   if (hasFile){
     const url = await uploadFile();
     if (url && text) {
@@ -291,7 +283,6 @@ async function sendMessage(){
     return;
   }
 
-  // 2) Message texte
   if (!text) return;
   chatInput.value = '';
   try{
@@ -714,20 +705,19 @@ exportFolderBtn?.addEventListener('click', async ()=>{
   const files = await idbListFiles(STATE_DOCS.folder);
   if (!files.length) { alert('Aucun fichier à exporter'); return; }
 
-  // Création d’un .tar simple (compatible Safari iOS)
-  function pad(str,len){ return (str + '\0'.repeat(len)).slice(0,len); }
+  function padStr(str,len){ return (str + '\0'.repeat(len)).slice(0,len); }
   function tarHeader(name, size){
     const buf = new Uint8Array(512);
     const enc = new TextEncoder();
-    buf.set(enc.encode(pad(name,100)),0);
-    buf.set(enc.encode(pad('0000777',8)),100);
-    buf.set(enc.encode(pad('0000000',8)),108);
-    buf.set(enc.encode(pad('0000000',8)),116);
-    buf.set(enc.encode(pad(size.toString(8),12)),124);
-    buf.set(enc.encode(pad(Math.floor(Date.now()/1000).toString(8),12)),136);
+    buf.set(enc.encode(padStr(name,100)),0);
+    buf.set(enc.encode(padStr('0000777',8)),100);
+    buf.set(enc.encode(padStr('0000000',8)),108);
+    buf.set(enc.encode(padStr('0000000',8)),116);
+    buf.set(enc.encode(padStr(size.toString(8),12)),124);
+    buf.set(enc.encode(padStr(Math.floor(Date.now()/1000).toString(8),12)),136);
     buf[156] = '0'.charCodeAt(0);
     let sum = 0; for(let i=0;i<512;i++) sum += buf[i];
-    buf.set(enc.encode(pad(sum.toString(8),8)),148);
+    buf.set(enc.encode(padStr(sum.toString(8),8)),148);
     return buf;
   }
   function tarPad(n){ return new Uint8Array((512 - (n % 512)) % 512); }
