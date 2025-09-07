@@ -30,6 +30,14 @@ function goToTab(id){
   if (!tab) return; tab.click();
 }
 
+// Quand on ouvre l'onglet Calendrier : on remet les filtres à zéro
+document.querySelector('.tab[data-tab="calendar"]')?.addEventListener('click', ()=>{
+  selectedDate = null; // enlève le filtre par jour
+  const f = document.getElementById('calFilter');  if (f) f.value = '*';
+  const s = document.getElementById('calSearch');  if (s) s.value = '';
+  renderEvents();
+});
+
 // ===== MENU (Clic&miam du jour) =====
 const MENU_PREFIX = "https://clicetmiam.fr/mesmenus/5387/5765/";
 const tz = "Europe/Paris";
@@ -184,10 +192,20 @@ function renderEvents(){
       <div class="spacer"></div>
       <button class="del">Suppr</button>
     `;
-    li.querySelector('.del')?.addEventListener('click', ()=>{
-      const idx = state.events.indexOf(ev);
-      if (idx>-1){ state.events.splice(idx,1); save(); renderEvents(); }
-    });
+    li.querySelector('.del')?.addEventListener('click', async ()=>{
+  // 1) supprime côté Worker si on a un id
+  if (ev.remoteId) {
+    try{
+      await fetch(`${WORKER_URL}/cal/del?id=${encodeURIComponent(ev.remoteId)}`, {
+        method:'POST',
+        headers:{ Authorization:'Bearer '+SECRET }
+      });
+    }catch(e){ /* pas bloquant */ }
+  }
+  // 2) supprime localement
+  const idx = state.events.indexOf(ev);
+  if (idx > -1) { state.events.splice(idx,1); save(); renderEvents(); }
+});
     eventList.appendChild(li);
   });
   updateDashboard();
@@ -207,15 +225,27 @@ eventForm?.addEventListener('submit', async (e)=>{
   };
 
   // 1) local
-  state.events.push(ev); save(); renderEvents(); eventForm.reset();
+  state.events.push(ev); 
+  save(); 
+  renderEvents(); 
+  eventForm.reset();
 
   // 2) sync vers le Worker (pour le flux ICS)
   try{
-    await fetch(WORKER_CAL_ADD, {
+    const r = await fetch(WORKER_CAL_ADD, {
       method:'POST',
       headers:{ 'Content-Type':'application/json', Authorization:'Bearer '+SECRET },
       body: JSON.stringify(ev)
     });
+    const data = await r.json().catch(()=>null);
+    if (data && data.id) {
+      // stocke l'ID distant pour pouvoir supprimer plus tard
+      const last = state.events[state.events.length - 1];
+      if (last === ev) { 
+        ev.remoteId = data.id; 
+        save(); 
+      }
+    }
   }catch(e){ /* silencieux si hors-ligne */ }
 });
 
@@ -287,6 +317,7 @@ const chatUpload = document.getElementById('chatUpload');
 const chatName   = document.getElementById('chatName');
 const SUB_URL = 'https://family-app.teiki5320.workers.dev/calendar.ics?token=Partenaire85/'; // ← remplace par ton CAL_TOKEN
 const WORKER_CAL_ADD = `${WORKER_URL}/cal/add`;
+const WORKER_CAL_LIST = `${WORKER_URL}/cal/list`;
 
 const NAME_KEY = 'familyApp.chatName';
 if (chatName) chatName.value = localStorage.getItem(NAME_KEY) || '';
@@ -508,6 +539,13 @@ renderEvents = function(){
       <div class="who">${ev.date} ${ev.time||''} · ${ev.place||''} [${ev.category}]</div></div>`;
     list.appendChild(li);
   });
+  if (!events.length){
+  const li = document.createElement('li');
+  li.className = 'item';
+  li.innerHTML = `<div><strong>Aucun évènement ce jour</strong>
+                  <div class="who">Clique une autre date ou réinitialise les filtres</div></div>`;
+  list.appendChild(li);
+}
 
   renderMonth(calYear,calMonth);
   updateDashboard();
@@ -519,6 +557,31 @@ calMonth = now.getMonth();
 calYear  = now.getFullYear();
 renderEvents();
 
+async function syncFromWorker(){
+  try{
+    const r = await fetch(WORKER_CAL_LIST);
+    const data = await r.json();
+    if (!Array.isArray(data.events)) return;
+    let changed = false;
+
+    for (const w of data.events){ // {id,title,date,time,place,category,note,ts}
+      let local = state.events.find(e => e.remoteId === w.id) ||
+                  state.events.find(e => e.title===w.title && e.date===w.date && (e.time||'')===(w.time||''));
+      if (!local){
+        state.events.push({
+          title:w.title, date:w.date, time:w.time||'',
+          place:w.place||'', category:w.category||'Autre', note:w.note||'',
+          remoteId:w.id
+        });
+        changed = true;
+      } else if (!local.remoteId){
+        local.remoteId = w.id; changed = true;
+      }
+    }
+    if (changed){ save(); renderEvents(); }
+  }catch(e){}
+}
+
 // ===== Initial render =====
-renderTasks(); renderBudget(); renderNotes(); renderEvents(); updateDashboard();
+renderTasks(); renderBudget(); renderNotes(); syncFromWorker(); renderEvents(); updateDashboard();
 refreshMessages(); setInterval(refreshMessages, 4000);
