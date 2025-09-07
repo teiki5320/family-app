@@ -179,36 +179,71 @@ if (!Array.isArray(state.events)) state.events = [];
 const eventForm = $('#eventForm'), eventTitle = $('#eventTitle'), eventDate = $('#eventDate'), eventTime = $('#eventTime');
 const eventList = $('#eventList'), icsGenerateBtn = $('#icsGenerate'), icsDownloadBtn = $('#icsDownload'), icsPreview = $('#icsPreview');
 
-function renderEvents(){
-  if(!eventList) return;
-  eventList.innerHTML = '';
-  const events = [...state.events].sort((a,b)=> (a.date+(a.time||'00:00')).localeCompare(b.date+(b.time||'00:00')));
-  events.forEach((ev)=>{
+// [CAL] Affichage liste avec filtre jour/catégorie/recherche + suppression Worker
+renderEvents = function(){
+  const filter = document.getElementById('calFilter')?.value || '*';
+  const search = (document.getElementById('calSearch')?.value||'').toLowerCase();
+  const list = document.getElementById('eventList');
+  if(!list) return;
+  list.innerHTML='';
+
+  const sel = typeof selectedDate !== 'undefined' ? selectedDate : null;
+
+  const events = (state.events||[]).filter(ev=>{
+    const byDay  = !sel || ev.date === sel;
+    const byCat  = (filter==='*' || ev.category===filter);
+    const byText =
+      (!search ||
+       (ev.title||'').toLowerCase().includes(search) ||
+       (ev.place||'').toLowerCase().includes(search));
+    return byDay && byCat && byText;
+  }).sort((a,b)=> (a.date+(a.time||'')).localeCompare(b.date+(b.time||'')));
+
+  events.forEach(ev=>{
+    const li = document.createElement('li'); li.className = 'item';
+    const when = `${ev.date} ${ev.time||''}`.trim();
+    li.innerHTML = `
+      <div>
+        <strong>${ev.title}</strong>
+        <div class="who">${when}${ev.place?` · ${ev.place}`:''} [${ev.category||'Autre'}]</div>
+      </div>
+      <div class="spacer"></div>
+      <button class="del" aria-label="Supprimer">Suppr</button>
+    `;
+
+    // bouton supprimer : Worker + local
+    li.querySelector('.del')?.addEventListener('click', async ()=>{
+      // 1) supprime côté Worker si on a un id
+      if (ev.remoteId) {
+        try{
+          await fetch(`${WORKER_URL}/cal/del?id=${encodeURIComponent(ev.remoteId)}`, {
+            method:'POST',
+            headers:{ Authorization:'Bearer '+SECRET }
+          });
+        }catch(e){ /* pas bloquant */ }
+      }
+      // 2) supprime localement
+      const idx = state.events.indexOf(ev);
+      if (idx > -1) { state.events.splice(idx,1); save(); renderEvents(); }
+    });
+
+    list.appendChild(li);
+  });
+
+  // si aucun évènement pour ce filtre / jour
+  if (!events.length){
     const li = document.createElement('li');
     li.className = 'item';
-    const when = new Date(ev.date + 'T' + (ev.time||'09:00')).toLocaleString('fr-FR');
-    li.innerHTML = `
-      <div><strong>${ev.title}</strong><div class="who">${when}</div></div>
-      <div class="spacer"></div>
-      <button class="del">Suppr</button>
-    `;
-    li.querySelector('.del')?.addEventListener('click', async ()=>{
-  // 1) supprime côté Worker si on a un id
-  if (ev.remoteId) {
-    try{
-      await fetch(`${WORKER_URL}/cal/del?id=${encodeURIComponent(ev.remoteId)}`, {
-        method:'POST',
-        headers:{ Authorization:'Bearer '+SECRET }
-      });
-    }catch(e){ /* pas bloquant */ }
+    const msg = sel ? 'Aucun évènement ce jour' : 'Aucun évènement';
+    li.innerHTML = `<div><strong>${msg}</strong>
+                    <div class="who">Clique une autre date ou réinitialise les filtres</div></div>`;
+    list.appendChild(li);
   }
-  // 2) supprime localement
-  const idx = state.events.indexOf(ev);
-  if (idx > -1) { state.events.splice(idx,1); save(); renderEvents(); }
-});
-    eventList.appendChild(li);
-  });
+
+  // rafraîchir la grille et les stats
+  renderMonth(calYear,calMonth);
   updateDashboard();
+};
 }
 eventForm?.addEventListener('submit', async (e)=>{
   e.preventDefault();
