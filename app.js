@@ -532,86 +532,124 @@ async function syncFromWorker(){
   syncFromWorker();
 })();
 
-// ===== DOCUMENTS (IndexedDB local) =====
-const DOCS_DB_NAME = 'familyDocs.v1';
-const DOCS_STORE   = 'files';
-const FOLDERS_KEY  = 'familyApp.folders';
-const STATE_DOCS = { folder: null };
+// ===== DOCUMENTS (Cloudflare R2 via Worker) =====
+const docsFolderSelect   = document.getElementById('folderSelect');
+const docsNewFolderName  = document.getElementById('newFolderName');
+const docsCreateBtn      = document.getElementById('createFolderBtn');
+const docsDeleteBtn      = document.getElementById('deleteFolderBtn'); // (optionnel: on ne supprime pas les dossiers côté R2 ici)
+const docsFileInput      = document.getElementById('docFile');
+const docsUploadBtn      = document.getElementById('uploadDocBtn');
+const docsExportBtn      = document.getElementById('exportFolderBtn'); // (optionnel: pas nécessaire)
+const docsList           = document.getElementById('docList');
 
-function loadFolders(){
-  try{
-    const arr = JSON.parse(localStorage.getItem(FOLDERS_KEY) || '[]');
-    return Array.isArray(arr) ? arr : [];
-  }catch{ return []; }
-}
-function saveFolders(arr){
-  localStorage.setItem(FOLDERS_KEY, JSON.stringify(arr));
-}
+let DOCS_STATE = { folder: 'Général', folders: [] };
 
-let dbPromise = null;
-function openDocsDB(){
-  if (dbPromise) return dbPromise;
-  dbPromise = new Promise((resolve, reject)=>{
-    const req = indexedDB.open(DOCS_DB_NAME, 1);
-    req.onupgradeneeded = (ev)=>{
-      const db = ev.target.result;
-      if (!db.objectStoreNames.contains(DOCS_STORE)){
-        const store = db.createObjectStore(DOCS_STORE, { keyPath:'id' });
-        store.createIndex('by_folder', 'folder', { unique:false });
-      }
-    };
-    req.onsuccess = ()=> resolve(req.result);
-    req.onerror   = ()=> reject(req.error);
+async function docsFetchJSON(url, init = {}) {
+  const r = await fetch(url, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(init.headers || {})
+    }
   });
-  return dbPromise;
+  if (!r.ok) throw new Error(await r.text().catch(()=>r.statusText));
+  return await r.json();
 }
-async function idbAddFile(folder, file){
-  const db = await openDocsDB();
-  const tx = db.transaction(DOCS_STORE, 'readwrite');
-  const store = tx.objectStore(DOCS_STORE);
-  const rec = {
-    id: `${folder}::${crypto.randomUUID()}`,
-    folder,
-    name: file.name,
-    type: file.type || 'application/octet-stream',
-    size: file.size || 0,
-    ts: Date.now(),
-    blob: file
-  };
-  await store.add(rec);
-  await tx.done?.catch(()=>{});
-  return rec;
+async function docsListFolders() {
+  const data = await docsFetchJSON(`${WORKER_URL}/docs/folders`);
+  DOCS_STATE.folders = Array.isArray(data.folders) ? data.folders : [];
+  if (!DOCS_STATE.folders.includes('Général')) DOCS_STATE.folders.unshift('Général');
+  if (!DOCS_STATE.folder || !DOCS_STATE.folders.includes(DOCS_STATE.folder)) DOCS_STATE.folder = DOCS_STATE.folders[0];
+  renderDocsFolders();
 }
-async function idbListFiles(folder){
-  const db = await openDocsDB();
-  const tx = db.transaction(DOCS_STORE, 'readonly');
-  const idx = tx.objectStore(DOCS_STORE).index('by_folder');
-  const req = idx.getAll(IDBKeyRange.only(folder));
-  return await new Promise((res,rej)=>{
-    req.onsuccess = ()=> res(req.result || []);
-    req.onerror   = ()=> rej(req.error);
+function renderDocsFolders() {
+  if (!docsFolderSelect) return;
+  docsFolderSelect.innerHTML = '';
+  for (const name of DOCS_STATE.folders) {
+    const opt = document.createElement('option');
+    opt.value = name; opt.textContent = name;
+    docsFolderSelect.appendChild(opt);
+  }
+  docsFolderSelect.value = DOCS_STATE.folder;
+}
+async function docsListFiles() {
+  if (!docsList) return;
+  docsList.innerHTML = '';
+  const data = await docsFetchJSON(`${WORKER_URL}/docs/list?folder=${encodeURIComponent(DOCS_STATE.folder)}`);
+  const files = data.files || [];
+  files.sort((a,b)=> new Date(b.uploaded) - new Date(a.uploaded));
+  for (const f of files) {
+    const li = document.createElement('li'); li.className = 'item';
+    const when = new Date(f.uploaded).toLocaleString('fr-FR');
+    const sizeKB = (f.size/1024).toFixed(1) + ' Ko';
+    li.innerHTML = `
+      <div>
+        <div class="name">${f.name}</div>
+        <div class="who">${sizeKB} · ${f.httpMetadata?.contentType || 'fichier'} · ${when}</div>
+      </div>
+      <div class="spacer"></div>
+      <a class="ghost" href="${WORKER_URL}/docs/get?key=${encodeURIComponent(f.key)}" target="_blank" rel="noopener">Ouvrir</a>
+      <a class="ghost" href="${WORKER_URL}/docs/download?key=${encodeURIComponent(f.key)}">Télécharger</a>
+      <button class="del">Suppr</button>
+    `;
+    li.querySelector('.del')?.addEventListener('click', async ()=>{
+      if (!confirm('Supprimer ce fichier ?')) return;
+      await docsFetchJSON(`${WORKER_URL}/docs/del`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer '+SECRET },
+        body: JSON.stringify({ key: f.key })
+      });
+      docsListFiles();
+    });
+    docsList.appendChild(li);
+  }
+  if (!files.length) {
+    const li = document.createElement('li'); li.className = 'item';
+    li.innerHTML = `<div><strong>Aucun fichier</strong><div class="who">Ajoute des fichiers au dossier "${DOCS_STATE.folder}".</div></div>`;
+    docsList.appendChild(li);
+  }
+}
+docsFolderSelect?.addEventListener('change', ()=>{
+  DOCS_STATE.folder = docsFolderSelect.value || 'Général';
+  docsListFiles();
+});
+docsCreateBtn?.addEventListener('click', async ()=>{
+  const name = (docsNewFolderName?.value || '').trim();
+  if (!name) return alert('Nom de dossier vide');
+  await docsFetchJSON(`${WORKER_URL}/docs/mkdir`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer '+SECRET },
+    body: JSON.stringify({ name })
   });
-}
-async function idbDeleteFile(id){
-  const db = await openDocsDB();
-  const tx = db.transaction(DOCS_STORE, 'readwrite');
-  await tx.objectStore(DOCS_STORE).delete(id);
-  await tx.done?.catch(()=>{});
-}
-async function idbDownloadFile(id){
-  const db = await openDocsDB();
-  const tx = db.transaction(DOCS_STORE, 'readonly');
-  const rec = await new Promise((res,rej)=>{
-    const r = tx.objectStore(DOCS_STORE).get(id);
-    r.onsuccess = ()=> res(r.result);
-    r.onerror   = ()=> rej(r.error);
+  docsNewFolderName.value = '';
+  await docsListFolders();
+  await docsListFiles();
+});
+// (Optionnel) Désactiver le bouton supprimer dossier si tu ne veux pas l’implémenter côté Worker
+docsDeleteBtn?.addEventListener('click', ()=>{
+  alert('Suppression de dossier non implémentée (évite les suppressions massives dangereux).');
+});
+
+docsUploadBtn?.addEventListener('click', async ()=>{
+  if (!docsFileInput?.files?.length) return alert('Choisis un ou plusieurs fichiers');
+  const fd = new FormData();
+  fd.append('folder', DOCS_STATE.folder);
+  for (const f of docsFileInput.files) fd.append('file', f);
+  const r = await fetch(`${WORKER_URL}/docs/upload`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer '+SECRET }, // pas de Content-Type ici (FormData)
+    body: fd
   });
-  if (!rec) return;
-  const url = URL.createObjectURL(rec.blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = rec.name || 'fichier'; a.click();
-  setTimeout(()=> URL.revokeObjectURL(url), 1500);
-}
+  if (!r.ok) return alert('Upload échoué: ' + (await r.text().catch(()=>r.statusText)));
+  docsFileInput.value = '';
+  docsListFiles();
+});
+
+// Init Documents
+(async function initDocs(){
+  await docsListFolders();
+  await docsListFiles();
+})();
 
 // UI docs
 const folderSelect     = document.getElementById('folderSelect');
