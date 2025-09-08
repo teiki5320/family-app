@@ -108,25 +108,15 @@ code{background:#0e0e14;padding:2px 6px;border-radius:6px;border:1px solid var(-
   font-size: 12px;
   position: relative;
 }
-.cal-grid .day.today {
-  background: #1f2230;
-}
-.cal-grid .day .num {
-  font-weight: bold;
-}
-.cal-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin: 1px;
-}
+.cal-grid .day.today { background: #1f2230; }
+.cal-grid .day .num { font-weight: bold; }
+.cal-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin:1px; }
 .cat-Famille { background:#4a90e2; }
 .cat-École   { background:#50e3c2; }
 .cat-Santé   { background:#e26a8a; }
 .cat-Autre   { background:#999; }
 
-/* Météo */
+/* ===== Météo ===== */
 .wx-now{
   display:flex; justify-content:space-between; align-items:center;
   background:#0e0e14; border:1px solid var(--border); border-radius:12px;
@@ -137,3 +127,61 @@ code{background:#0e0e14;padding:2px 6px;border-radius:6px;border:1px solid var(-
 .wx-temp{font-size:28px; font-weight:800}
 .wx-desc{color:var(--muted)}
 .wx-place{color:var(--muted); font-size:14px}
+
+/* ===== Documents : dossiers + fichiers ===== */
+.folder-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill, minmax(150px, 1fr));
+  gap:12px;
+  margin:10px 0 6px 0;
+}
+.folder-card{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:12px;
+  min-height:104px;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  cursor:pointer;
+  user-select:none;
+  transition:transform .08s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.folder-card:hover{
+  transform:translateY(-1px);
+  border-color:rgba(255,255,255,.18);
+  box-shadow:0 2px 14px rgba(0,0,0,.25);
+}
+.folder-card.active{
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px var(--ring);
+}
+.folder-card .icon{ font-size:28px; line-height:1 }
+.folder-card .name{
+  font-weight:700; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.folder-card .count{ font-size:12px; color:var(--muted) }
+
+.sep{ border:0; height:1px; background:var(--border); margin:14px 0 }
+
+.files-area{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:12px;
+}
+.files-area .ghost{
+  background:transparent;
+  border:1px solid var(--border);
+}
+.files-area .ghost:hover{
+  border-color:rgba(255,255,255,.2);
+}
+
+#docList .item .name{ font-weight:700 }
+#docList .item .who, #docList .item .meta{ opacity:.75; font-size:12px }
+
+@media (max-width:420px){
+  .folder-grid{ grid-template-columns:repeat(auto-fill, minmax(130px, 1fr)); }
+}
