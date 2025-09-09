@@ -536,10 +536,10 @@ async function syncFromWorker(){
 const docsFolderSelect   = document.getElementById('folderSelect');
 const docsNewFolderName  = document.getElementById('newFolderName');
 const docsCreateBtn      = document.getElementById('createFolderBtn');
-const docsDeleteBtn      = document.getElementById('deleteFolderBtn'); // (optionnel: on ne supprime pas les dossiers côté R2 ici)
+const docsDeleteBtn      = document.getElementById('deleteFolderBtn'); // optionnel
 const docsFileInput      = document.getElementById('docFile');
 const docsUploadBtn      = document.getElementById('uploadDocBtn');
-const docsExportBtn      = document.getElementById('exportFolderBtn'); // (optionnel: pas nécessaire)
+const docsExportBtn      = document.getElementById('exportFolderBtn'); // optionnel
 const docsList           = document.getElementById('docList');
 
 let DOCS_STATE = { folder: 'Général', folders: [] };
@@ -548,7 +548,7 @@ async function docsFetchJSON(url, init = {}) {
   const r = await fetch(url, {
     ...init,
     headers: {
-      'Content-Type': 'application/json',
+      ...(init.body instanceof FormData ? {} : {'Content-Type':'application/json'}),
       ...(init.headers || {})
     }
   });
@@ -560,17 +560,15 @@ async function docsListFolders() {
   DOCS_STATE.folders = Array.isArray(data.folders) ? data.folders : [];
   if (!DOCS_STATE.folders.includes('Général')) DOCS_STATE.folders.unshift('Général');
   if (!DOCS_STATE.folder || !DOCS_STATE.folders.includes(DOCS_STATE.folder)) DOCS_STATE.folder = DOCS_STATE.folders[0];
-  renderDocsFolders();
-}
-function renderDocsFolders() {
-  if (!docsFolderSelect) return;
-  docsFolderSelect.innerHTML = '';
-  for (const name of DOCS_STATE.folders) {
-    const opt = document.createElement('option');
-    opt.value = name; opt.textContent = name;
-    docsFolderSelect.appendChild(opt);
+  if (docsFolderSelect){
+    docsFolderSelect.innerHTML = '';
+    for (const name of DOCS_STATE.folders) {
+      const opt = document.createElement('option');
+      opt.value = name; opt.textContent = name;
+      docsFolderSelect.appendChild(opt);
+    }
+    docsFolderSelect.value = DOCS_STATE.folder;
   }
-  docsFolderSelect.value = DOCS_STATE.folder;
 }
 async function docsListFiles() {
   if (!docsList) return;
@@ -625,11 +623,9 @@ docsCreateBtn?.addEventListener('click', async ()=>{
   await docsListFolders();
   await docsListFiles();
 });
-// (Optionnel) Désactiver le bouton supprimer dossier si tu ne veux pas l’implémenter côté Worker
 docsDeleteBtn?.addEventListener('click', ()=>{
-  alert('Suppression de dossier non implémentée (évite les suppressions massives dangereux).');
+  alert('Suppression de dossier non implémentée côté Worker.');
 });
-
 docsUploadBtn?.addEventListener('click', async ()=>{
   if (!docsFileInput?.files?.length) return alert('Choisis un ou plusieurs fichiers');
   const fd = new FormData();
@@ -637,144 +633,22 @@ docsUploadBtn?.addEventListener('click', async ()=>{
   for (const f of docsFileInput.files) fd.append('file', f);
   const r = await fetch(`${WORKER_URL}/docs/upload`, {
     method: 'POST',
-    headers: { Authorization: 'Bearer '+SECRET }, // pas de Content-Type ici (FormData)
+    headers: { Authorization: 'Bearer '+SECRET }, // IMPORTANT: ne pas définir Content-Type avec FormData
     body: fd
   });
   if (!r.ok) return alert('Upload échoué: ' + (await r.text().catch(()=>r.statusText)));
   docsFileInput.value = '';
   docsListFiles();
 });
-
 // Init Documents
 (async function initDocs(){
-  await docsListFolders();
-  await docsListFiles();
+  try{
+    await docsListFolders();
+    await docsListFiles();
+  }catch(e){
+    console.error('Docs init:', e);
+  }
 })();
-
-// UI docs
-const folderSelect     = document.getElementById('folderSelect');
-const newFolderName    = document.getElementById('newFolderName');
-const createFolderBtn  = document.getElementById('createFolderBtn');
-const deleteFolderBtn  = document.getElementById('deleteFolderBtn');
-const docFileInput     = document.getElementById('docFile');
-const uploadDocBtn     = document.getElementById('uploadDocBtn');
-const exportFolderBtn  = document.getElementById('exportFolderBtn');
-const docList          = document.getElementById('docList');
-
-function renderFolderSelect(){
-  if (!folderSelect) return;
-  const folders = loadFolders();
-  folderSelect.innerHTML = '';
-  if (!folders.length) { folders.push('Général'); saveFolders(folders); }
-  folders.forEach(name=>{
-    const opt = document.createElement('option');
-    opt.value = name; opt.textContent = name;
-    folderSelect.appendChild(opt);
-  });
-  if (!STATE_DOCS.folder || !folders.includes(STATE_DOCS.folder)) STATE_DOCS.folder = folders[0];
-  folderSelect.value = STATE_DOCS.folder;
-}
-async function renderDocs(){
-  if (!docList) return;
-  renderFolderSelect();
-  const files = await idbListFiles(STATE_DOCS.folder);
-  docList.innerHTML = '';
-  files.sort((a,b)=> b.ts - a.ts);
-  files.forEach(f=>{
-    const li = document.createElement('li'); li.className = 'item';
-    const when = new Date(f.ts).toLocaleString('fr-FR');
-    li.innerHTML = `
-      <div>
-        <div class="name">${f.name}</div>
-        <div class="who">${(f.size/1024).toFixed(1)} Ko · ${f.type || 'fichier'} · ${when}</div>
-      </div>
-      <div class="spacer"></div>
-      <button class="ghost dl">Télécharger</button>
-      <button class="del">Suppr</button>
-    `;
-    li.querySelector('.dl')?.addEventListener('click', ()=> idbDownloadFile(f.id));
-    li.querySelector('.del')?.addEventListener('click', async ()=>{
-      if (!confirm('Supprimer ce fichier ?')) return;
-      await idbDeleteFile(f.id);
-      renderDocs();
-    });
-    docList.appendChild(li);
-  });
-  if (!files.length){
-    const li = document.createElement('li'); li.className = 'item';
-    li.innerHTML = `<div><strong>Aucun fichier</strong><div class="who">Ajoute des fichiers au dossier "${STATE_DOCS.folder}"</div></div>`;
-    docList.appendChild(li);
-  }
-}
-createFolderBtn?.addEventListener('click', ()=>{
-  const name = (newFolderName?.value || '').trim();
-  if (!name) return alert('Nom de dossier vide');
-  const folders = loadFolders();
-  if (folders.includes(name)) return alert('Ce dossier existe déjà');
-  folders.push(name); saveFolders(folders);
-  newFolderName.value = '';
-  STATE_DOCS.folder = name;
-  renderDocs();
-});
-deleteFolderBtn?.addEventListener('click', async ()=>{
-  const cur = STATE_DOCS.folder;
-  if (!cur) return;
-  if (!confirm(`Supprimer le dossier "${cur}" et tous ses fichiers ?`)) return;
-  const files = await idbListFiles(cur);
-  for (const f of files) await idbDeleteFile(f.id);
-  const folders = loadFolders().filter(n => n !== cur);
-  saveFolders(folders);
-  STATE_DOCS.folder = folders[0] || null;
-  renderDocs();
-});
-folderSelect?.addEventListener('change', ()=>{
-  STATE_DOCS.folder = folderSelect.value || null;
-  renderDocs();
-});
-uploadDocBtn?.addEventListener('click', async ()=>{
-  if (!STATE_DOCS.folder) { alert('Crée ou choisis un dossier'); return; }
-  if (!docFileInput?.files?.length){ alert('Choisis un ou plusieurs fichiers'); return; }
-  const files = Array.from(docFileInput.files);
-  for (const f of files) await idbAddFile(STATE_DOCS.folder, f);
-  docFileInput.value = '';
-  renderDocs();
-});
-exportFolderBtn?.addEventListener('click', async ()=>{
-  if (!STATE_DOCS.folder) return;
-  const files = await idbListFiles(STATE_DOCS.folder);
-  if (!files.length) { alert('Aucun fichier à exporter'); return; }
-
-  function padStr(str,len){ return (str + '\0'.repeat(len)).slice(0,len); }
-  function tarHeader(name, size){
-    const buf = new Uint8Array(512);
-    const enc = new TextEncoder();
-    buf.set(enc.encode(padStr(name,100)),0);
-    buf.set(enc.encode(padStr('0000777',8)),100);
-    buf.set(enc.encode(padStr('0000000',8)),108);
-    buf.set(enc.encode(padStr('0000000',8)),116);
-    buf.set(enc.encode(padStr(size.toString(8),12)),124);
-    buf.set(enc.encode(padStr(Math.floor(Date.now()/1000).toString(8),12)),136);
-    buf[156] = '0'.charCodeAt(0);
-    let sum = 0; for(let i=0;i<512;i++) sum += buf[i];
-    buf.set(enc.encode(padStr(sum.toString(8),8)),148);
-    return buf;
-  }
-  function tarPad(n){ return new Uint8Array((512 - (n % 512)) % 512); }
-
-  const parts = [];
-  for (const f of files){
-    const b = f.blob;
-    parts.push(tarHeader(f.name, b.size));
-    parts.push(new Uint8Array(await b.arrayBuffer()));
-    parts.push(tarPad(b.size));
-  }
-  parts.push(new Uint8Array(512));
-  parts.push(new Uint8Array(512));
-  const tarBlob = new Blob(parts, {type:'application/x-tar'});
-  const url = URL.createObjectURL(tarBlob);
-  const a = document.createElement('a'); a.href = url; a.download = `${STATE_DOCS.folder}.tar`; a.click();
-  setTimeout(()=> URL.revokeObjectURL(url), 2000);
-});
 
 // ===== Dashboard numbers =====
 function updateDashboard(){
@@ -794,5 +668,4 @@ function updateDashboard(){
 renderTasks();
 renderBudget();
 renderNotes();
-renderDocs();
 updateDashboard();
