@@ -1,3 +1,5 @@
+Voici app.js complet avec les correctifs (chargement des dossiers/fichiers, en-têtes GET non forcés, et logs utiles). Tu peux remplacer tout ton fichier par celui-ci.
+
 // ===== Helpers & State =====
 const $  = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -29,7 +31,7 @@ if (tabsBar){
   tabsBar.addEventListener('click', (e)=>{
     const btn = e.target.closest('.tab');
     if (!btn) return;
-    if (btn.id === 'menuTab') { e.preventDefault(); return; } // lien externe géré à part
+    if (btn.id === 'menuTab') { e.preventDefault(); return; } // lien externe
     e.preventDefault();
     const id = btn.dataset.tab;
     if (id) showPanel(id);
@@ -547,51 +549,57 @@ const docList           = document.getElementById('docList');
 
 // État
 const DOCS = {
-  // chemin courant. "" = racine, "Ecole/Factures" = sous-dossier
-  folder: '',
-  // fils directs du dossier courant
-  folders: [],
-  // fichiers du dossier courant
-  files: []
+  folder: '',   // "" = racine, "Ecole/Factures" = sous-dossier
+  folders: [],  // fils directs du dossier courant
+  files: []     // fichiers du dossier courant
 };
 
+// --- Fetch JSON générique (ne force pas Content-Type sur GET)
 async function docsFetchJSON(url, init = {}) {
-  const r = await fetch(url, {
-    ...init,
-    headers: {
-      ...(init.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
-      ...(init.headers || {})
-    }
-  });
-  if (!r.ok) throw new Error(await r.text().catch(()=>r.statusText));
-  return await r.json();
+  const isBodyJSON = init.body && !(init.body instanceof FormData);
+  const headers = Object.assign({}, init.headers || {}, isBodyJSON ? { 'Content-Type':'application/json' } : {});
+  const r = await fetch(url, { ...init, headers });
+  if (!r.ok) {
+    const text = await r.text().catch(()=> r.statusText);
+    console.error('[docsFetchJSON] HTTP', r.status, text);
+    throw new Error(text || ('HTTP '+r.status));
+  }
+  return r.json();
 }
 
 /* ----------- LISTES ----------- */
 
-// Racine : liste des dossiers 1er niveau (pour remplir la grille initiale)
+// Racine : liste des dossiers 1er niveau (non utilisé directement, mais conservé)
 async function loadRootFolders() {
   const data = await docsFetchJSON(`${WORKER_URL}/docs/folders`);
-  // on affiche la racine comme un "chemin vide"
   DOCS.folder  = '';
   DOCS.folders = Array.isArray(data.folders) ? data.folders : [];
   DOCS.files   = [];
   renderFolderGrid();
-  renderFiles(); // vide
+  renderFiles();
 }
 
 // Dossier courant : liste sous-dossiers + fichiers
 async function loadEntries(folderPath = DOCS.folder) {
-  const u = new URL(`${WORKER_URL}/docs/list`);
-  if (folderPath) u.searchParams.set('folder', folderPath);
-  const data = await docsFetchJSON(u.toString());
+  try{
+    const u = new URL(`${WORKER_URL}/docs/list`);
+    if (folderPath) u.searchParams.set('folder', folderPath);
+    console.log('[docs] GET', u.toString());
+    const data = await docsFetchJSON(u.toString());
 
-  DOCS.folder  = data.folder || '';
-  DOCS.folders = data.folders || [];
-  DOCS.files   = data.files   || [];
+    console.log('[docs] listEntries ->', data);
+    DOCS.folder  = data.folder  || '';
+    DOCS.folders = Array.isArray(data.folders) ? data.folders : [];
+    DOCS.files   = Array.isArray(data.files)   ? data.files   : [];
 
-  renderFolderGrid();
-  renderFiles();
+    renderFolderGrid();
+    renderFiles();
+  }catch(e){
+    console.error('[docs] loadEntries failed:', e);
+    if (folderGrid) {
+      folderGrid.innerHTML = `<div class="muted">Erreur de chargement des dossiers<br><code>${(e?.message||e)}</code></div>`;
+    }
+  }
 }
 
 /* ----------- RENDER ----------- */
@@ -601,7 +609,7 @@ function renderFolderGrid() {
   if (!folderGrid) return;
   folderGrid.innerHTML = '';
 
-  // Afficher le "chemin" (fil d’Ariane) en haut de la grille
+  // Fil d’Ariane
   const crumbs = DOCS.folder ? DOCS.folder.split('/') : [];
   const trail = document.createElement('div');
   trail.className = 'row';
@@ -613,7 +621,7 @@ function renderFolderGrid() {
   trail.appendChild(homeBtn);
 
   let acc = '';
-  crumbs.forEach((part, i) => {
+  crumbs.forEach((part) => {
     const sep = document.createElement('span');
     sep.style.opacity = .5; sep.style.margin = '0 6px'; sep.textContent = '/';
     trail.appendChild(sep);
@@ -640,6 +648,7 @@ function renderFolderGrid() {
     grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(140px, 1fr))';
     grid.style.gap = '10px';
 
+    console.log('[docs] render folders:', DOCS.folders);
     DOCS.folders.forEach(name => {
       const card = document.createElement('button');
       card.className = 'tile';
@@ -708,6 +717,7 @@ function renderFiles() {
 
 /* ----------- ACTIONS ----------- */
 
+// Créer un (sous-)dossier dans le dossier courant
 createFolderBtn?.addEventListener('click', async ()=>{
   const name = (newFolderName?.value || '').trim();
   if (!name) return alert('Nom de dossier vide');
@@ -740,7 +750,6 @@ deleteFolderBtn?.addEventListener('click', async ()=>{
     },
     body: JSON.stringify({ folder: DOCS.folder })
   });
-  // remonte d’un niveau
   const parent = DOCS.folder.includes('/') ? DOCS.folder.split('/').slice(0,-1).join('/') : '';
   await loadEntries(parent);
 });
@@ -763,7 +772,8 @@ uploadDocBtn?.addEventListener('click', async ()=>{
 
 // Init documents (affiche racine)
 (async function initDocs(){
-  await loadEntries('');   // charge racine
+  console.log('[docs] init → racine');
+  await loadEntries('');   // charge la racine
 })();
 
 // ===== Dashboard numbers =====
