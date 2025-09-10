@@ -201,27 +201,31 @@
 <section id="docs" class="panel" role="tabpanel">
   <h2>Documents</h2>
 
-  <!-- Création dossier -->
+  <!-- Créer un dossier à la racine -->
   <div class="row" style="gap:10px; flex-wrap:wrap">
     <input id="newFolderName" type="text" placeholder="Nouveau dossier (ex: École)" style="flex:1 1 260px">
     <button id="createFolderBtn">Créer dossier</button>
   </div>
 
-  <!-- Grille de dossiers -->
+  <!-- Fil d’Ariane + actions dossier courant -->
+  <div class="row" style="gap:8px; flex-wrap:wrap; margin-top:10px">
+    <div id="docsBreadcrumb" class="muted">/</div>
+    <div class="spacer"></div>
+    <button id="deleteFolderBtn" class="ghost">Supprimer ce dossier</button>
+  </div>
+
+  <!-- Grille de dossiers et liste de fichiers -->
   <div id="folderGrid" class="folder-grid" style="margin-top:12px"></div>
 
-  <hr class="sep">
-
-  <!-- Zone fichiers du dossier sélectionné -->
-  <div id="filesArea" class="files-area" style="display:none">
-    <div class="row" style="align-items:center; gap:10px; flex-wrap:wrap">
-      <h3 id="currentFolderName" style="margin:0">Dossier</h3>
-      <div class="spacer"></div>
-      <button id="deleteFolderBtn" class="ghost">Supprimer ce dossier</button>
-      <button id="exportFolderBtn" class="ghost">Exporter .zip</button>
+  <div id="filesArea" class="files-area" style="display:block; margin-top:10px">
+    <!-- Création sous-dossier dans le dossier courant -->
+    <div class="row" style="gap:10px; flex-wrap:wrap">
+      <input id="newSubFolderName" type="text" placeholder="Nouveau sous-dossier (ex: 2025)" style="flex:1 1 240px">
+      <button id="createSubFolderBtn" class="secondary">Créer sous-dossier</button>
     </div>
 
-    <div class="row" style="gap:10px; flex-wrap:wrap; margin-top:10px">
+    <!-- Upload fichiers dans le dossier courant -->
+    <div class="row" style="gap:10px; flex-wrap:wrap">
       <input id="docFile" type="file" multiple>
       <button id="uploadDocBtn">Ajouter au dossier</button>
     </div>

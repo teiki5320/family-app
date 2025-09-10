@@ -532,103 +532,99 @@ async function syncFromWorker(){
   syncFromWorker();
 })();
 
-// ===== DOCUMENTS (Cloudflare R2 via Worker) =====
-// UI (grille + zone fichiers)
-const folderGrid        = document.getElementById('folderGrid');
-const filesArea         = document.getElementById('filesArea');
-const currentFolderName = document.getElementById('currentFolderName');
-const newFolderName     = document.getElementById('newFolderName');
-const createFolderBtn   = document.getElementById('createFolderBtn');
-const deleteFolderBtn   = document.getElementById('deleteFolderBtn'); // (non implémenté côté Worker)
-const exportFolderBtn   = document.getElementById('exportFolderBtn'); // (optionnel)
-const docFileInput      = document.getElementById('docFile');
-const uploadDocBtn      = document.getElementById('uploadDocBtn');
-const docList           = document.getElementById('docList');
+// ===== DOCUMENTS (Cloudflare R2 via Worker, navigation dossiers) =====
+const docsBreadcrumb     = document.getElementById('docsBreadcrumb');
+const folderGrid         = document.getElementById('folderGrid');
+const docList            = document.getElementById('docList');
 
-let DOCS_STATE = { folder: null, folders: [] };
+const newFolderName      = document.getElementById('newFolderName');      // racine
+const createFolderBtn    = document.getElementById('createFolderBtn');
 
-// Appels HTTP utilitaires
-async function docsFetchJSON(url, init = {}) {
-  const r = await fetch(url, {
-    ...init,
-    headers: {
-      ...(init.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
-      ...(init.headers || {})
-    }
-  });
-  if (!r.ok) throw new Error(await r.text().catch(()=>r.statusText));
-  return await r.json();
-}
+const newSubFolderName   = document.getElementById('newSubFolderName');   // sous-dossier
+const createSubFolderBtn = document.getElementById('createSubFolderBtn');
 
-// 1) Récupérer la liste des dossiers
-async function docsListFolders() {
-  const data = await docsFetchJSON(`${WORKER_URL}/docs/folders`);
-  DOCS_STATE.folders = Array.isArray(data.folders) ? data.folders : [];
-  // fallback sympa : un dossier "Général" si aucun existant
-  if (!DOCS_STATE.folders.length) DOCS_STATE.folders = ['Général'];
-  if (!DOCS_STATE.folder || !DOCS_STATE.folders.includes(DOCS_STATE.folder)) {
-    DOCS_STATE.folder = DOCS_STATE.folders[0];
+const deleteFolderBtn    = document.getElementById('deleteFolderBtn');
+
+const docsFileInput      = document.getElementById('docFile');
+const docsUploadBtn      = document.getElementById('uploadDocBtn');
+
+const DOCS = {
+  path: '',    // chemin courant ("" = racine, sinon "Ecole/2025")
+  folders: [], // sous-dossiers du chemin courant
+  files: []    // fichiers du chemin courant
+};
+
+function breadcrumbs(){
+  const parts = DOCS.path ? DOCS.path.split('/') : [];
+  const items = ['<a href="#" data-path="">/</a>'];
+  let acc = '';
+  for (let i=0;i<parts.length;i++){
+    acc = i===0 ? parts[0] : acc + '/' + parts[i];
+    items.push(`<span>›</span><a href="#" data-path="${acc}">${parts[i]}</a>`);
   }
-  renderFolderGrid();
-}
-
-// 2) Afficher la grille de dossiers
-function renderFolderGrid() {
-  if (!folderGrid) return;
-  folderGrid.innerHTML = '';
-
-  DOCS_STATE.folders.forEach(name => {
-    const card = document.createElement('button');
-    card.className = 'folder-card';
-    card.type = 'button';
-    card.innerHTML = `
-      <div class="icon">📁</div>
-      <div class="name">${name}</div>
-    `;
-    if (name === DOCS_STATE.folder) card.classList.add('active');
-    card.addEventListener('click', () => selectFolder(name));
-    folderGrid.appendChild(card);
+  docsBreadcrumb.innerHTML = `<div class="breadcrumb">${items.join(' ')}</div>`;
+  docsBreadcrumb.querySelectorAll('a').forEach(a=>{
+    a.addEventListener('click', (e)=>{
+      e.preventDefault();
+      DOCS.path = a.dataset.path || '';
+      refreshDocs();
+    });
   });
-
-  // Dans tous les cas on (ré)affiche la zone fichiers du dossier sélectionné
-  if (filesArea) filesArea.style.display = 'block';
-  if (currentFolderName) currentFolderName.textContent = DOCS_STATE.folder;
-  docsListFiles();
 }
 
-// 3) Sélection d’un dossier
-function selectFolder(name) {
-  DOCS_STATE.folder = name;
-  renderFolderGrid();
+function renderFolders(){
+  folderGrid.innerHTML = '';
+  if (!DOCS.folders.length){
+    folderGrid.innerHTML = `<div class="muted">Aucun sous-dossier</div>`;
+    return;
+  }
+  DOCS.folders.forEach(name=>{
+    const el = document.createElement('div');
+    el.className = 'folder-item';
+    el.innerHTML = `
+      <div class="top">
+        <div style="font-size:22px">📁</div>
+        <div class="name">${name}</div>
+      </div>
+      <div class="actions">
+        <button class="ghost open">Ouvrir</button>
+        <button class="del">Suppr</button>
+      </div>
+    `;
+    el.querySelector('.open')?.addEventListener('click', ()=>{
+      DOCS.path = DOCS.path ? `${DOCS.path}/${name}` : name;
+      refreshDocs();
+    });
+    el.querySelector('.del')?.addEventListener('click', async ()=>{
+      if (!confirm(`Supprimer le dossier "${name}" et tout son contenu ?`)) return;
+      const full = DOCS.path ? `${DOCS.path}/${name}` : name;
+      await docsFetchJSON(`${WORKER_URL}/docs/rmdir`, {
+        method:'POST',
+        headers:{ Authorization:'Bearer '+SECRET },
+        body: JSON.stringify({ folder: full })
+      }).catch(e=> alert(e.message||e));
+      refreshDocs();
+    });
+    folderGrid.appendChild(el);
+  });
 }
 
-// 4) Lister les fichiers du dossier courant
-async function docsListFiles() {
-  if (!docList) return;
+function renderFiles(){
   docList.innerHTML = '';
-  try {
-    const data = await docsFetchJSON(
-      `${WORKER_URL}/docs/list?folder=${encodeURIComponent(DOCS_STATE.folder)}`
-    );
-    const files = data.files || [];
-    files.sort((a,b)=> new Date(b.uploaded) - new Date(a.uploaded));
-
-    if (!files.length) {
-      const li = document.createElement('li'); li.className = 'item';
-      li.innerHTML = `<div><strong>Aucun fichier</strong>
-        <div class="who">Ajoute des fichiers au dossier "${DOCS_STATE.folder}".</div></div>`;
-      docList.appendChild(li);
-      return;
-    }
-
-    for (const f of files) {
-      const li = document.createElement('li'); li.className = 'item';
+  if (!DOCS.files.length){
+    docList.innerHTML = `<li class="item"><div><strong>Aucun fichier</strong><div class="who">Ajoute des fichiers au dossier "${DOCS.path || '/'}".</div></div></li>`;
+    return;
+  }
+  DOCS.files
+    .sort((a,b)=> new Date(b.uploaded) - new Date(a.uploaded))
+    .forEach(f=>{
       const when = new Date(f.uploaded).toLocaleString('fr-FR');
       const sizeKB = (f.size/1024).toFixed(1) + ' Ko';
+      const li = document.createElement('li'); li.className='item';
       li.innerHTML = `
         <div>
           <div class="name">${f.name}</div>
-          <div class="who">${sizeKB} · ${f.httpMetadata?.contentType || 'fichier'} · ${when}</div>
+          <div class="who">${sizeKB} · ${f.httpMetadata?.contentType||'fichier'} · ${when}</div>
         </div>
         <div class="spacer"></div>
         <a class="ghost" href="${WORKER_URL}/docs/get?key=${encodeURIComponent(f.key)}" target="_blank" rel="noopener">Ouvrir</a>
@@ -636,90 +632,97 @@ async function docsListFiles() {
         <button class="del">Suppr</button>
       `;
       li.querySelector('.del')?.addEventListener('click', async ()=>{
-        if (!confirm('Supprimer ce fichier ?')) return;
+        if (!confirm(`Supprimer "${f.name}" ?`)) return;
         await docsFetchJSON(`${WORKER_URL}/docs/del`, {
-          method: 'POST',
-          headers: { Authorization: 'Bearer '+SECRET },
+          method:'POST',
+          headers:{ Authorization:'Bearer '+SECRET },
           body: JSON.stringify({ key: f.key })
-        });
-        docsListFiles();
+        }).catch(e=> alert(e.message||e));
+        refreshDocs();
       });
       docList.appendChild(li);
-    }
-  } catch(e) {
-    const li = document.createElement('li'); li.className = 'item';
-    li.innerHTML = `<div><strong>Erreur</strong><div class="who">${e?.message||e}</div></div>`;
-    docList.appendChild(li);
-  }
+    });
 }
 
-// 5) Créer un dossier
+/* --- appels réseau util --- */
+async function docsFetchJSON(url, init={}){
+  const r = await fetch(url, {
+    ...init,
+    headers: { 'Content-Type':'application/json', ...(init.headers||{}) }
+  });
+  if (!r.ok) throw new Error(await r.text().catch(()=>r.statusText));
+  return await r.json();
+}
+async function loadEntries(){
+  const q = DOCS.path ? `?folder=${encodeURIComponent(DOCS.path)}` : '';
+  const data = await docsFetchJSON(`${WORKER_URL}/docs/list${q}`);
+  DOCS.folders = data.folders || [];
+  DOCS.files   = data.files || [];
+}
+
+/* --- actions UI --- */
 createFolderBtn?.addEventListener('click', async ()=>{
-  const name = (newFolderName?.value || '').trim();
-  if (!name) return alert('Nom de dossier vide');
-  try{
-    await docsFetchJSON(`${WORKER_URL}/docs/mkdir`, {
-      method: 'POST',
-      headers: { Authorization: 'Bearer '+SECRET },
-      body: JSON.stringify({ name })
-    });
-    newFolderName.value = '';
-    await docsListFolders(); // recharge + sélection auto
-  }catch(e){
-    alert('Création impossible: ' + (e?.message||e));
-  }
+  const name = (newFolderName?.value||'').trim();
+  if (!name) return alert('Nom vide');
+  await docsFetchJSON(`${WORKER_URL}/docs/mkdir`, {
+    method:'POST',
+    headers:{ Authorization:'Bearer '+SECRET },
+    body: JSON.stringify({ name, parent:'' })
+  }).catch(e=> alert(e.message||e));
+  newFolderName.value='';
+  refreshDocs();
 });
 
-// 6) Upload fichiers dans le dossier sélectionné
-uploadDocBtn?.addEventListener('click', async ()=>{
-  if (!DOCS_STATE.folder) return alert('Choisis un dossier');
-  if (!docFileInput?.files?.length) return alert('Choisis un ou plusieurs fichiers');
+createSubFolderBtn?.addEventListener('click', async ()=>{
+  const name = (newSubFolderName?.value||'').trim();
+  if (!name) return alert('Nom vide');
+  await docsFetchJSON(`${WORKER_URL}/docs/mkdir`, {
+    method:'POST',
+    headers:{ Authorization:'Bearer '+SECRET },
+    body: JSON.stringify({ name, parent: DOCS.path })
+  }).catch(e=> alert(e.message||e));
+  newSubFolderName.value='';
+  refreshDocs();
+});
 
+deleteFolderBtn?.addEventListener('click', async ()=>{
+  if (!DOCS.path){ alert('Tu es à la racine.'); return; }
+  if (!confirm(`Supprimer le dossier "${DOCS.path}" et tout son contenu ?`)) return;
+  await docsFetchJSON(`${WORKER_URL}/docs/rmdir`, {
+    method:'POST',
+    headers:{ Authorization:'Bearer '+SECRET },
+    body: JSON.stringify({ folder: DOCS.path })
+  }).catch(e=> alert(e.message||e));
+  // remonter au parent
+  DOCS.path = DOCS.path.includes('/') ? DOCS.path.split('/').slice(0,-1).join('/') : '';
+  refreshDocs();
+});
+
+docsUploadBtn?.addEventListener('click', async ()=>{
+  if (!docsFileInput?.files?.length) return alert('Choisis des fichiers');
   const fd = new FormData();
-  fd.append('folder', DOCS_STATE.folder);
-  for (const f of docFileInput.files) fd.append('file', f);
-
+  fd.append('folder', DOCS.path);
+  for (const f of docsFileInput.files) fd.append('file', f);
   const r = await fetch(`${WORKER_URL}/docs/upload`, {
-    method: 'POST',
-    headers: { Authorization: 'Bearer '+SECRET }, // pas de Content-Type ici
+    method:'POST',
+    headers:{ Authorization:'Bearer '+SECRET },
     body: fd
   });
   if (!r.ok) return alert('Upload échoué: ' + (await r.text().catch(()=>r.statusText)));
-  docFileInput.value = '';
-  docsListFiles();
+  docsFileInput.value='';
+  refreshDocs();
 });
 
-// 7) (Optionnel) Supprimer dossier (non implémenté côté Worker)
-deleteFolderBtn?.addEventListener('click', ()=>{
-  alert('Suppression de dossier non implémentée (sécurité).');
-});
+/* --- cycle de rendu --- */
+async function refreshDocs(){
+  breadcrumbs();
+  await loadEntries();
+  renderFolders();
+  renderFiles();
+}
 
-// 8) (Optionnel) Export .zip -- pas implémenté côté Worker ici
-exportFolderBtn?.addEventListener('click', ()=>{
-  alert('Export .zip non implémenté côté Worker.');
-});
-
-// Init Documents
-(async function initDocs(){
-  try{
-    await docsListFolders();
-  }catch(e){
-    // Affiche une erreur visible si le Worker est inaccessible
-    if (folderGrid) {
-      folderGrid.innerHTML = `<div class="item"><strong>Erreur</strong>
-        <div class="who">${e?.message||e}</div></div>`;
-    }
-  }
-})();
-// Init Documents
-(async function initDocs(){
-  try{
-    await docsListFolders();
-    await docsListFiles();
-  }catch(e){
-    console.error('Docs init:', e);
-  }
-})();
+// init
+refreshDocs();
 
 // ===== Dashboard numbers =====
 function updateDashboard(){
