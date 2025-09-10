@@ -532,99 +532,161 @@ async function syncFromWorker(){
   syncFromWorker();
 })();
 
-// ===== DOCUMENTS (Cloudflare R2 via Worker, navigation dossiers) =====
-const docsBreadcrumb     = document.getElementById('docsBreadcrumb');
-const folderGrid         = document.getElementById('folderGrid');
-const docList            = document.getElementById('docList');
+// ===== DOCUMENTS (Cloudflare R2 via Worker, dossiers imbriqués) =====
 
-const newFolderName      = document.getElementById('newFolderName');      // racine
-const createFolderBtn    = document.getElementById('createFolderBtn');
+// Éléments UI
+const folderGrid        = document.getElementById('folderGrid');
+const filesArea         = document.getElementById('filesArea');
+const currentFolderName = document.getElementById('currentFolderName');
+const newFolderName     = document.getElementById('newFolderName');
+const createFolderBtn   = document.getElementById('createFolderBtn');
+const deleteFolderBtn   = document.getElementById('deleteFolderBtn');
+const docFileInput      = document.getElementById('docFile');
+const uploadDocBtn      = document.getElementById('uploadDocBtn');
+const docList           = document.getElementById('docList');
 
-const newSubFolderName   = document.getElementById('newSubFolderName');   // sous-dossier
-const createSubFolderBtn = document.getElementById('createSubFolderBtn');
-
-const deleteFolderBtn    = document.getElementById('deleteFolderBtn');
-
-const docsFileInput      = document.getElementById('docFile');
-const docsUploadBtn      = document.getElementById('uploadDocBtn');
-
+// État
 const DOCS = {
-  path: '',    // chemin courant ("" = racine, sinon "Ecole/2025")
-  folders: [], // sous-dossiers du chemin courant
-  files: []    // fichiers du chemin courant
+  // chemin courant. "" = racine, "Ecole/Factures" = sous-dossier
+  folder: '',
+  // fils directs du dossier courant
+  folders: [],
+  // fichiers du dossier courant
+  files: []
 };
 
-function breadcrumbs(){
-  const parts = DOCS.path ? DOCS.path.split('/') : [];
-  const items = ['<a href="#" data-path="">/</a>'];
-  let acc = '';
-  for (let i=0;i<parts.length;i++){
-    acc = i===0 ? parts[0] : acc + '/' + parts[i];
-    items.push(`<span>›</span><a href="#" data-path="${acc}">${parts[i]}</a>`);
-  }
-  docsBreadcrumb.innerHTML = `<div class="breadcrumb">${items.join(' ')}</div>`;
-  docsBreadcrumb.querySelectorAll('a').forEach(a=>{
-    a.addEventListener('click', (e)=>{
-      e.preventDefault();
-      DOCS.path = a.dataset.path || '';
-      refreshDocs();
-    });
+async function docsFetchJSON(url, init = {}) {
+  const r = await fetch(url, {
+    ...init,
+    headers: {
+      ...(init.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
+      ...(init.headers || {})
+    }
   });
+  if (!r.ok) throw new Error(await r.text().catch(()=>r.statusText));
+  return await r.json();
 }
 
-function renderFolders(){
+/* ----------- LISTES ----------- */
+
+// Racine : liste des dossiers 1er niveau (pour remplir la grille initiale)
+async function loadRootFolders() {
+  const data = await docsFetchJSON(`${WORKER_URL}/docs/folders`);
+  // on affiche la racine comme un "chemin vide"
+  DOCS.folder  = '';
+  DOCS.folders = Array.isArray(data.folders) ? data.folders : [];
+  DOCS.files   = [];
+  renderFolderGrid();
+  renderFiles(); // vide
+}
+
+// Dossier courant : liste sous-dossiers + fichiers
+async function loadEntries(folderPath = DOCS.folder) {
+  const u = new URL(`${WORKER_URL}/docs/list`);
+  if (folderPath) u.searchParams.set('folder', folderPath);
+  const data = await docsFetchJSON(u.toString());
+
+  DOCS.folder  = data.folder || '';
+  DOCS.folders = data.folders || [];
+  DOCS.files   = data.files   || [];
+
+  renderFolderGrid();
+  renderFiles();
+}
+
+/* ----------- RENDER ----------- */
+
+// Grille des dossiers (pour le dossier courant)
+function renderFolderGrid() {
+  if (!folderGrid) return;
   folderGrid.innerHTML = '';
-  if (!DOCS.folders.length){
-    folderGrid.innerHTML = `<div class="muted">Aucun sous-dossier</div>`;
-    return;
-  }
-  DOCS.folders.forEach(name=>{
-    const el = document.createElement('div');
-    el.className = 'folder-item';
-    el.innerHTML = `
-      <div class="top">
-        <div style="font-size:22px">📁</div>
-        <div class="name">${name}</div>
-      </div>
-      <div class="actions">
-        <button class="ghost open">Ouvrir</button>
-        <button class="del">Suppr</button>
-      </div>
-    `;
-    el.querySelector('.open')?.addEventListener('click', ()=>{
-      DOCS.path = DOCS.path ? `${DOCS.path}/${name}` : name;
-      refreshDocs();
-    });
-    el.querySelector('.del')?.addEventListener('click', async ()=>{
-      if (!confirm(`Supprimer le dossier "${name}" et tout son contenu ?`)) return;
-      const full = DOCS.path ? `${DOCS.path}/${name}` : name;
-      await docsFetchJSON(`${WORKER_URL}/docs/rmdir`, {
-        method:'POST',
-        headers:{ Authorization:'Bearer '+SECRET },
-        body: JSON.stringify({ folder: full })
-      }).catch(e=> alert(e.message||e));
-      refreshDocs();
-    });
-    folderGrid.appendChild(el);
+
+  // Afficher le "chemin" (fil d’Ariane) en haut de la grille
+  const crumbs = DOCS.folder ? DOCS.folder.split('/') : [];
+  const trail = document.createElement('div');
+  trail.className = 'row';
+  trail.style.marginBottom = '6px';
+  const homeBtn = document.createElement('button');
+  homeBtn.className = 'ghost';
+  homeBtn.textContent = '🏠 Racine';
+  homeBtn.onclick = () => loadEntries('');
+  trail.appendChild(homeBtn);
+
+  let acc = '';
+  crumbs.forEach((part, i) => {
+    const sep = document.createElement('span');
+    sep.style.opacity = .5; sep.style.margin = '0 6px'; sep.textContent = '/';
+    trail.appendChild(sep);
+
+    acc = acc ? acc + '/' + part : part;
+    const b = document.createElement('button');
+    b.className = 'ghost';
+    b.textContent = part;
+    b.onclick = () => loadEntries(acc);
+    trail.appendChild(b);
   });
+
+  folderGrid.appendChild(trail);
+
+  // Cartes de dossier
+  if (!DOCS.folders.length) {
+    const empty = document.createElement('div');
+    empty.className = 'muted';
+    empty.textContent = DOCS.folder ? 'Aucun sous-dossier' : 'Aucun dossier';
+    folderGrid.appendChild(empty);
+  } else {
+    const grid = document.createElement('div');
+    grid.style.display = 'grid';
+    grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(140px, 1fr))';
+    grid.style.gap = '10px';
+
+    DOCS.folders.forEach(name => {
+      const card = document.createElement('button');
+      card.className = 'tile';
+      card.style.alignItems = 'flex-start';
+      card.innerHTML = `
+        <div class="icon">📁</div>
+        <div class="title">${name}</div>
+        <div class="subtitle">Ouvrir</div>
+      `;
+      card.onclick = () => {
+        const next = DOCS.folder ? `${DOCS.folder}/${name}` : name;
+        loadEntries(next);
+      };
+      grid.appendChild(card);
+    });
+
+    folderGrid.appendChild(grid);
+  }
+
+  // Afficher la zone fichiers
+  if (filesArea) filesArea.style.display = 'block';
+  if (currentFolderName) currentFolderName.textContent = DOCS.folder || 'Racine';
 }
 
-function renderFiles(){
+// Liste des fichiers du dossier courant
+function renderFiles() {
+  if (!docList) return;
   docList.innerHTML = '';
-  if (!DOCS.files.length){
-    docList.innerHTML = `<li class="item"><div><strong>Aucun fichier</strong><div class="who">Ajoute des fichiers au dossier "${DOCS.path || '/'}".</div></div></li>`;
+
+  if (!DOCS.files.length) {
+    const li = document.createElement('li');
+    li.className = 'item';
+    li.innerHTML = `<div><strong>Aucun fichier</strong><div class="who">Ajoute des fichiers au dossier "${currentFolderName?.textContent || 'Racine'}".</div></div>`;
+    docList.appendChild(li);
     return;
   }
+
   DOCS.files
     .sort((a,b)=> new Date(b.uploaded) - new Date(a.uploaded))
-    .forEach(f=>{
+    .forEach(f => {
+      const li = document.createElement('li'); li.className = 'item';
       const when = new Date(f.uploaded).toLocaleString('fr-FR');
       const sizeKB = (f.size/1024).toFixed(1) + ' Ko';
-      const li = document.createElement('li'); li.className='item';
       li.innerHTML = `
         <div>
           <div class="name">${f.name}</div>
-          <div class="who">${sizeKB} · ${f.httpMetadata?.contentType||'fichier'} · ${when}</div>
+          <div class="who">${sizeKB} · ${f.httpMetadata?.contentType || 'fichier'} · ${when}</div>
         </div>
         <div class="spacer"></div>
         <a class="ghost" href="${WORKER_URL}/docs/get?key=${encodeURIComponent(f.key)}" target="_blank" rel="noopener">Ouvrir</a>
@@ -637,92 +699,65 @@ function renderFiles(){
           method:'POST',
           headers:{ Authorization:'Bearer '+SECRET },
           body: JSON.stringify({ key: f.key })
-        }).catch(e=> alert(e.message||e));
-        refreshDocs();
+        });
+        loadEntries(); // refresh
       });
       docList.appendChild(li);
     });
 }
 
-/* --- appels réseau util --- */
-async function docsFetchJSON(url, init={}){
-  const r = await fetch(url, {
-    ...init,
-    headers: { 'Content-Type':'application/json', ...(init.headers||{}) }
-  });
-  if (!r.ok) throw new Error(await r.text().catch(()=>r.statusText));
-  return await r.json();
-}
-async function loadEntries(){
-  const q = DOCS.path ? `?folder=${encodeURIComponent(DOCS.path)}` : '';
-  const data = await docsFetchJSON(`${WORKER_URL}/docs/list${q}`);
-  DOCS.folders = data.folders || [];
-  DOCS.files   = data.files || [];
-}
+/* ----------- ACTIONS ----------- */
 
-/* --- actions UI --- */
+// Créer un (sous-)dossier dans le dossier courant
 createFolderBtn?.addEventListener('click', async ()=>{
-  const name = (newFolderName?.value||'').trim();
-  if (!name) return alert('Nom vide');
+  const name = (newFolderName?.value || '').trim();
+  if (!name) return alert('Nom de dossier vide');
   await docsFetchJSON(`${WORKER_URL}/docs/mkdir`, {
-    method:'POST',
-    headers:{ Authorization:'Bearer '+SECRET },
-    body: JSON.stringify({ name, parent:'' })
-  }).catch(e=> alert(e.message||e));
-  newFolderName.value='';
-  refreshDocs();
+    method: 'POST',
+    headers: { Authorization: 'Bearer '+SECRET },
+    body: JSON.stringify({ name, parent: DOCS.folder })
+  });
+  newFolderName.value = '';
+  loadEntries(); // on reste dans le dossier courant
 });
 
-createSubFolderBtn?.addEventListener('click', async ()=>{
-  const name = (newSubFolderName?.value||'').trim();
-  if (!name) return alert('Nom vide');
-  await docsFetchJSON(`${WORKER_URL}/docs/mkdir`, {
-    method:'POST',
-    headers:{ Authorization:'Bearer '+SECRET },
-    body: JSON.stringify({ name, parent: DOCS.path })
-  }).catch(e=> alert(e.message||e));
-  newSubFolderName.value='';
-  refreshDocs();
-});
-
+// Supprimer le dossier courant (récursif)
 deleteFolderBtn?.addEventListener('click', async ()=>{
-  if (!DOCS.path){ alert('Tu es à la racine.'); return; }
-  if (!confirm(`Supprimer le dossier "${DOCS.path}" et tout son contenu ?`)) return;
+  if (!DOCS.folder) return alert('Tu es à la racine (rien à supprimer).');
+  if (!confirm(`Supprimer le dossier "${DOCS.folder}" et tout son contenu ?`)) return;
   await docsFetchJSON(`${WORKER_URL}/docs/rmdir`, {
-    method:'POST',
-    headers:{ Authorization:'Bearer '+SECRET },
-    body: JSON.stringify({ folder: DOCS.path })
-  }).catch(e=> alert(e.message||e));
-  // remonter au parent
-  DOCS.path = DOCS.path.includes('/') ? DOCS.path.split('/').slice(0,-1).join('/') : '';
-  refreshDocs();
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer '+SECRET,
+      'x-confirm-delete': 'yes'
+    },
+    body: JSON.stringify({ folder: DOCS.folder })
+  });
+  // remonte d’un niveau
+  const parent = DOCS.folder.includes('/') ? DOCS.folder.split('/').slice(0,-1).join('/') : '';
+  await loadEntries(parent);
 });
 
-docsUploadBtn?.addEventListener('click', async ()=>{
-  if (!docsFileInput?.files?.length) return alert('Choisis des fichiers');
+// Upload fichiers dans le dossier courant
+uploadDocBtn?.addEventListener('click', async ()=>{
+  if (!docFileInput?.files?.length) return alert('Choisis un ou plusieurs fichiers');
   const fd = new FormData();
-  fd.append('folder', DOCS.path);
-  for (const f of docsFileInput.files) fd.append('file', f);
+  fd.append('folder', DOCS.folder); // "" pour racine
+  for (const f of docFileInput.files) fd.append('file', f);
   const r = await fetch(`${WORKER_URL}/docs/upload`, {
     method:'POST',
     headers:{ Authorization:'Bearer '+SECRET },
     body: fd
   });
   if (!r.ok) return alert('Upload échoué: ' + (await r.text().catch(()=>r.statusText)));
-  docsFileInput.value='';
-  refreshDocs();
+  docFileInput.value = '';
+  loadEntries();
 });
 
-/* --- cycle de rendu --- */
-async function refreshDocs(){
-  breadcrumbs();
-  await loadEntries();
-  renderFolders();
-  renderFiles();
-}
-
-// init
-refreshDocs();
+// Init documents (affiche racine)
+(async function initDocs(){
+  await loadEntries('');   // charge racine
+})();
 
 // ===== Dashboard numbers =====
 function updateDashboard(){
