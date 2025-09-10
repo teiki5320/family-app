@@ -1,10 +1,11 @@
 :root{
   --bg:#0a0a0d; --panel:#121218; --ink:#f5f6f8; --muted:#9aa0a6;
   --accent:#e50914; --ring:rgba(229,9,20,.25); --radius:14px; --border:#1f2230;
+  --line:#1f2230; --shadow:0 6px 20px rgba(0,0,0,.25);
 }
 *{box-sizing:border-box} html,body{margin:0;height:100%}
 body{font-family:-apple-system, system-ui, Segoe UI, Roboto, sans-serif;background:var(--bg);color:var(--ink)}
-a{color:var(--ink)}
+a{color:var(--ink);text-decoration:none}
 
 .app-header,.app-footer{position:sticky;z-index:10;backdrop-filter:saturate(1.2) blur(6px);background:linear-gradient(180deg, rgba(10,10,13,.85), rgba(10,10,13,.6))}
 .app-header{top:0;display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border)}
@@ -16,7 +17,7 @@ a{color:var(--ink)}
 .tab.active,.tab:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 4px var(--ring)}
 
 main{padding:16px;max-width:960px;margin:0 auto}
-.panel{display:none;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.panel{display:none;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow)}
 .panel.active{display:block;animation:fade .2s ease-out}
 @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 
@@ -26,7 +27,7 @@ main{padding:16px;max-width:960px;margin:0 auto}
 input,select,textarea,button{font-size:16px}
 input,select,textarea{width:100%;background:#0e0e14;border:1px solid var(--border);color:var(--ink);padding:12px;border-radius:10px;outline:none}
 input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 4px var(--ring)}
-button{background:var(--accent);color:#fff;border:none;padding:12px 16px;border-radius:10px;font-weight:700}
+button{background:var(--accent);color:#fff;border:none;padding:12px 16px;border-radius:10px;font-weight:700;cursor:pointer}
 button.ghost{background:transparent;border:1px solid var(--border);color:var(--ink)}
 button.secondary{background:#303040}
 
@@ -35,7 +36,7 @@ button.secondary{background:#303040}
 .item input[type="checkbox"]{width:20px;height:20px}
 .item .who{color:var(--muted);font-size:13px}
 .item .spacer{flex:1}
-.item .del{background:transparent;border:1px solid var(--border);padding:6px 10px;border-radius:8px}
+.item .del{background:transparent;border:1px solid var(--border);padding:6px 10px;border-radius:8px;color:var(--ink)}
 
 .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0}
 .card{background:#0e0e14;border:1px solid var(--border);border-radius:12px;padding:12px}
@@ -116,7 +117,7 @@ code{background:#0e0e14;padding:2px 6px;border-radius:6px;border:1px solid var(-
 .cat-Santé   { background:#e26a8a; }
 .cat-Autre   { background:#999; }
 
-/* ===== Météo ===== */
+/* Météo */
 .wx-now{
   display:flex; justify-content:space-between; align-items:center;
   background:#0e0e14; border:1px solid var(--border); border-radius:12px;
@@ -125,63 +126,47 @@ code{background:#0e0e14;padding:2px 6px;border-radius:6px;border:1px solid var(-
 .wx-main{display:flex; gap:12px; align-items:center}
 .wx-emoji{font-size:36px; line-height:1}
 .wx-temp{font-size:28px; font-weight:800}
-.wx-desc{color:var(--muted)}
-.wx-place{color:var(--muted); font-size:14px}
+.wx-desc,.wx-place{color:var(--muted); font-size:14px}
 
-/* ===== Documents : dossiers + fichiers ===== */
+/* === Documents === */
 .folder-grid{
   display:grid;
-  grid-template-columns:repeat(auto-fill, minmax(150px, 1fr));
-  gap:12px;
-  margin:10px 0 6px 0;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap:10px;
 }
-.folder-card{
-  background:var(--panel);
-  border:1px solid var(--border);
-  border-radius:12px;
-  padding:12px;
-  min-height:104px;
+
+/* Grille de fichiers (vignettes) */
+.file-grid{
+  display:grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap:10px;
+  margin-top:10px;
+}
+.file-card{
+  background: var(--panel);
+  border:1px solid var(--line);
+  border-radius: var(--radius);
+  padding:10px;
   display:flex;
   flex-direction:column;
-  gap:6px;
-  cursor:pointer;
-  user-select:none;
-  transition:transform .08s ease, border-color .15s ease, box-shadow .15s ease;
+  gap:8px;
+  box-shadow: var(--shadow);
 }
-.folder-card:hover{
-  transform:translateY(-1px);
-  border-color:rgba(255,255,255,.18);
-  box-shadow:0 2px 14px rgba(0,0,0,.25);
+.file-card .thumb{
+  width:100%; height:120px;
+  border-radius:10px;
+  object-fit:cover; object-position:center;
+  background:#0b0c10;
 }
-.folder-card.active{
-  border-color:var(--accent);
-  box-shadow:0 0 0 3px var(--ring);
+.file-card .name{
+  font-size:13px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
 }
-.folder-card .icon{ font-size:28px; line-height:1 }
-.folder-card .name{
-  font-weight:700; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+.file-card .meta{
+  font-size:12px;
+  color: var(--muted);
 }
-.folder-card .count{ font-size:12px; color:var(--muted) }
-
-.sep{ border:0; height:1px; background:var(--border); margin:14px 0 }
-
-.files-area{
-  background:var(--panel);
-  border:1px solid var(--border);
-  border-radius:12px;
-  padding:12px;
-}
-.files-area .ghost{
-  background:transparent;
-  border:1px solid var(--border);
-}
-.files-area .ghost:hover{
-  border-color:rgba(255,255,255,.2);
-}
-
-#docList .item .name{ font-weight:700 }
-#docList .item .who, #docList .item .meta{ opacity:.75; font-size:12px }
-
-@media (max-width:420px){
-  .folder-grid{ grid-template-columns:repeat(auto-fill, minmax(130px, 1fr)); }
-}
+.file-actions{ display:flex; gap:6px; margin-top:auto; }
+.file-actions .ghost,.file-actions .del{ padding:6px 8px; font-size:12px; }

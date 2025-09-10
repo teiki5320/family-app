@@ -1,5 +1,3 @@
-Voici app.js complet avec les correctifs (chargement des dossiers/fichiers, en-têtes GET non forcés, et logs utiles). Tu peux remplacer tout ton fichier par celui-ci.
-
 // ===== Helpers & State =====
 const $  = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -31,7 +29,7 @@ if (tabsBar){
   tabsBar.addEventListener('click', (e)=>{
     const btn = e.target.closest('.tab');
     if (!btn) return;
-    if (btn.id === 'menuTab') { e.preventDefault(); return; } // lien externe
+    if (btn.id === 'menuTab') { e.preventDefault(); return; }
     e.preventDefault();
     const id = btn.dataset.tab;
     if (id) showPanel(id);
@@ -344,7 +342,7 @@ chatSend?.addEventListener('click', sendMessage);
 chatInput?.addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); }});
 refreshMessages(); setInterval(refreshMessages, 4000);
 
-// ===== CALENDRIER (local + Worker ICS) =====
+// ===== CALENDRIER =====
 if (!Array.isArray(state.events)) state.events = [];
 const eventForm = $('#eventForm'), eventTitle = $('#eventTitle'), eventDate = $('#eventDate'), eventTime = $('#eventTime');
 
@@ -485,10 +483,8 @@ eventForm?.addEventListener('submit', async (e)=>{
     note: (document.getElementById('eventNote')?.value || '')
   };
 
-  // local
   state.events.push(ev); save(); renderEvents(); eventForm.reset();
 
-  // Worker
   try{
     const r = await fetch(WORKER_CAL_ADD, {
       method:'POST',
@@ -536,7 +532,7 @@ async function syncFromWorker(){
 
 // ===== DOCUMENTS (Cloudflare R2 via Worker, dossiers imbriqués) =====
 
-// Éléments UI
+// UI
 const folderGrid        = document.getElementById('folderGrid');
 const filesArea         = document.getElementById('filesArea');
 const currentFolderName = document.getElementById('currentFolderName');
@@ -545,31 +541,28 @@ const createFolderBtn   = document.getElementById('createFolderBtn');
 const deleteFolderBtn   = document.getElementById('deleteFolderBtn');
 const docFileInput      = document.getElementById('docFile');
 const uploadDocBtn      = document.getElementById('uploadDocBtn');
-const docList           = document.getElementById('docList');
+const docGrid           = document.getElementById('docGrid');
 
-// État
-const DOCS = {
-  folder: '',   // "" = racine, "Ecole/Factures" = sous-dossier
-  folders: [],  // fils directs du dossier courant
-  files: []     // fichiers du dossier courant
-};
+// État documents
+const DOCS = { folder:'', folders:[], files:[] };
 
-// --- Fetch JSON générique (ne force pas Content-Type sur GET)
+// utilitaires mime
+function isImageType(t){ return /^image\//i.test(t||''); }
+function isPdfType(t){ return /^application\/pdf$/i.test(t||''); }
+
 async function docsFetchJSON(url, init = {}) {
-  const isBodyJSON = init.body && !(init.body instanceof FormData);
-  const headers = Object.assign({}, init.headers || {}, isBodyJSON ? { 'Content-Type':'application/json' } : {});
-  const r = await fetch(url, { ...init, headers });
-  if (!r.ok) {
-    const text = await r.text().catch(()=> r.statusText);
-    console.error('[docsFetchJSON] HTTP', r.status, text);
-    throw new Error(text || ('HTTP '+r.status));
-  }
-  return r.json();
+  const r = await fetch(url, {
+    ...init,
+    headers: {
+      ...(init.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
+      ...(init.headers || {})
+    }
+  });
+  if (!r.ok) throw new Error(await r.text().catch(()=>r.statusText));
+  return await r.json();
 }
 
-/* ----------- LISTES ----------- */
-
-// Racine : liste des dossiers 1er niveau (non utilisé directement, mais conservé)
+// Racine : dossiers 1er niveau
 async function loadRootFolders() {
   const data = await docsFetchJSON(`${WORKER_URL}/docs/folders`);
   DOCS.folder  = '';
@@ -579,37 +572,25 @@ async function loadRootFolders() {
   renderFiles();
 }
 
-// Dossier courant : liste sous-dossiers + fichiers
+// Dossier courant : sous-dossiers + fichiers
 async function loadEntries(folderPath = DOCS.folder) {
-  try{
-    const u = new URL(`${WORKER_URL}/docs/list`);
-    if (folderPath) u.searchParams.set('folder', folderPath);
-    console.log('[docs] GET', u.toString());
-    const data = await docsFetchJSON(u.toString());
+  const u = new URL(`${WORKER_URL}/docs/list`);
+  if (folderPath) u.searchParams.set('folder', folderPath);
+  const data = await docsFetchJSON(u.toString());
 
-    console.log('[docs] listEntries ->', data);
-    DOCS.folder  = data.folder  || '';
-    DOCS.folders = Array.isArray(data.folders) ? data.folders : [];
-    DOCS.files   = Array.isArray(data.files)   ? data.files   : [];
+  DOCS.folder  = data.folder || '';
+  DOCS.folders = data.folders || [];
+  DOCS.files   = data.files   || [];
 
-    renderFolderGrid();
-    renderFiles();
-  }catch(e){
-    console.error('[docs] loadEntries failed:', e);
-    if (folderGrid) {
-      folderGrid.innerHTML = `<div class="muted">Erreur de chargement des dossiers<br><code>${(e?.message||e)}</code></div>`;
-    }
-  }
+  renderFolderGrid();
+  renderFiles();
 }
 
-/* ----------- RENDER ----------- */
-
-// Grille des dossiers (pour le dossier courant)
+// Grille des dossiers (avec fil d’Ariane)
 function renderFolderGrid() {
   if (!folderGrid) return;
   folderGrid.innerHTML = '';
 
-  // Fil d’Ariane
   const crumbs = DOCS.folder ? DOCS.folder.split('/') : [];
   const trail = document.createElement('div');
   trail.className = 'row';
@@ -636,7 +617,6 @@ function renderFolderGrid() {
 
   folderGrid.appendChild(trail);
 
-  // Cartes de dossier
   if (!DOCS.folders.length) {
     const empty = document.createElement('div');
     empty.className = 'muted';
@@ -644,11 +624,8 @@ function renderFolderGrid() {
     folderGrid.appendChild(empty);
   } else {
     const grid = document.createElement('div');
-    grid.style.display = 'grid';
-    grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(140px, 1fr))';
-    grid.style.gap = '10px';
+    grid.className = 'folder-grid';
 
-    console.log('[docs] render folders:', DOCS.folders);
     DOCS.folders.forEach(name => {
       const card = document.createElement('button');
       card.className = 'tile';
@@ -668,97 +645,142 @@ function renderFolderGrid() {
     folderGrid.appendChild(grid);
   }
 
-  // Afficher la zone fichiers
   if (filesArea) filesArea.style.display = 'block';
   if (currentFolderName) currentFolderName.textContent = DOCS.folder || 'Racine';
 }
 
-// Liste des fichiers du dossier courant
+// Grille de fichiers (vignettes)
 function renderFiles() {
-  if (!docList) return;
-  docList.innerHTML = '';
+  if (!docGrid) return;
+  docGrid.innerHTML = '';
 
   if (!DOCS.files.length) {
-    const li = document.createElement('li');
-    li.className = 'item';
-    li.innerHTML = `<div><strong>Aucun fichier</strong><div class="who">Ajoute des fichiers au dossier "${currentFolderName?.textContent || 'Racine'}".</div></div>`;
-    docList.appendChild(li);
+    const empty = document.createElement('div');
+    empty.className = 'muted';
+    empty.textContent = `Aucun fichier dans "${currentFolderName?.textContent || 'Racine'}".`;
+    docGrid.appendChild(empty);
     return;
   }
 
-  DOCS.files
-    .sort((a,b)=> new Date(b.uploaded) - new Date(a.uploaded))
-    .forEach(f => {
-      const li = document.createElement('li'); li.className = 'item';
-      const when = new Date(f.uploaded).toLocaleString('fr-FR');
-      const sizeKB = (f.size/1024).toFixed(1) + ' Ko';
-      li.innerHTML = `
-        <div>
-          <div class="name">${f.name}</div>
-          <div class="who">${sizeKB} · ${f.httpMetadata?.contentType || 'fichier'} · ${when}</div>
-        </div>
-        <div class="spacer"></div>
-        <a class="ghost" href="${WORKER_URL}/docs/get?key=${encodeURIComponent(f.key)}" target="_blank" rel="noopener">Ouvrir</a>
-        <a class="ghost" href="${WORKER_URL}/docs/download?key=${encodeURIComponent(f.key)}">Télécharger</a>
-        <button class="del">Suppr</button>
-      `;
-      li.querySelector('.del')?.addEventListener('click', async ()=>{
-        if (!confirm(`Supprimer "${f.name}" ?`)) return;
-        await docsFetchJSON(`${WORKER_URL}/docs/del`, {
-          method:'POST',
-          headers:{ Authorization:'Bearer '+SECRET },
-          body: JSON.stringify({ key: f.key })
-        });
-        loadEntries(); // refresh
+  const files = [...DOCS.files].sort((a,b)=> new Date(b.uploaded) - new Date(a.uploaded));
+
+  files.forEach(f=>{
+    const card = document.createElement('div');
+    card.className = 'file-card';
+
+    const type = (f.httpMetadata && f.httpMetadata.contentType) || '';
+    const isImg = isImageType(type);
+    const isPdf = isPdfType(type);
+
+    if (isImg){
+      const img = document.createElement('img');
+      img.className = 'thumb';
+      img.alt = f.name;
+      img.loading = 'lazy';
+      img.src = `${WORKER_URL}/docs/get?key=${encodeURIComponent(f.key)}`;
+      img.onclick = ()=> window.open(img.src, '_blank', 'noopener');
+      card.appendChild(img);
+    } else {
+      const ph = document.createElement('div');
+      ph.className = 'thumb';
+      ph.style.display = 'flex';
+      ph.style.alignItems = 'center';
+      ph.style.justifyContent = 'center';
+      ph.style.fontSize = '36px';
+      ph.textContent = isPdf ? '📄' : '📦';
+      card.appendChild(ph);
+    }
+
+    // Ouvrir si on clique sur la carte (hors boutons)
+    card.onclick = (e)=>{
+      if (e.target.closest('.file-actions')) return;
+      window.open(`${WORKER_URL}/docs/get?key=${encodeURIComponent(f.key)}`, '_blank', 'noopener');
+    };
+
+    const name = document.createElement('div');
+    name.className = 'name';
+    name.title = f.name;
+    name.textContent = f.name;
+    card.appendChild(name);
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const when = new Date(f.uploaded).toLocaleString('fr-FR');
+    const sizeKB = (f.size/1024).toFixed(1) + ' Ko';
+    meta.textContent = `${sizeKB} · ${type || 'fichier'} · ${when}`;
+    card.appendChild(meta);
+
+    const actions = document.createElement('div');
+    actions.className = 'file-actions';
+
+    const openBtn = document.createElement('a');
+    openBtn.className = 'ghost';
+    openBtn.textContent = 'Ouvrir';
+    openBtn.href = `${WORKER_URL}/docs/get?key=${encodeURIComponent(f.key)}`;
+    openBtn.target = '_blank'; openBtn.rel = 'noopener';
+    actions.appendChild(openBtn);
+
+    const dlBtn = document.createElement('a');
+    dlBtn.className = 'ghost';
+    dlBtn.textContent = 'Télécharger';
+    dlBtn.href = `${WORKER_URL}/docs/download?key=${encodeURIComponent(f.key)}`;
+    actions.appendChild(dlBtn);
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'del';
+    delBtn.textContent = 'Suppr';
+    delBtn.onclick = async ()=>{
+      if (!confirm(`Supprimer "${f.name}" ?`)) return;
+      await docsFetchJSON(`${WORKER_URL}/docs/del`, {
+        method:'POST',
+        headers:{ Authorization:'Bearer '+SECRET },
+        body: JSON.stringify({ key: f.key })
       });
-      docList.appendChild(li);
-    });
+      loadEntries();
+    };
+    actions.appendChild(delBtn);
+
+    card.appendChild(actions);
+    docGrid.appendChild(card);
+  });
 }
 
-/* ----------- ACTIONS ----------- */
-
-// Créer un (sous-)dossier dans le dossier courant
+// Actions
 createFolderBtn?.addEventListener('click', async ()=>{
   const name = (newFolderName?.value || '').trim();
   if (!name) return alert('Nom de dossier vide');
 
   try{
-    console.log('[mkdir] start', { name, parent: DOCS.folder });
     const res = await docsFetchJSON(`${WORKER_URL}/docs/mkdir`, {
       method: 'POST',
       headers: { Authorization: 'Bearer '+SECRET },
-      body: JSON.stringify({ name, parent: DOCS.folder }) // parent="" à la racine
+      body: JSON.stringify({ name, parent: DOCS.folder })
     });
     console.log('[mkdir] ok', res);
     newFolderName.value = '';
-    await loadEntries(DOCS.folder); // rafraîchit la grille
+    await loadEntries(DOCS.folder);
   }catch(e){
     console.error('[mkdir] fail', e);
     alert('Création impossible : ' + (e?.message || e));
   }
 });
 
-// Supprimer le dossier courant (récursif)
 deleteFolderBtn?.addEventListener('click', async ()=>{
   if (!DOCS.folder) return alert('Tu es à la racine (rien à supprimer).');
   if (!confirm(`Supprimer le dossier "${DOCS.folder}" et tout son contenu ?`)) return;
   await docsFetchJSON(`${WORKER_URL}/docs/rmdir`, {
     method: 'POST',
-    headers: {
-      Authorization: 'Bearer '+SECRET,
-      'x-confirm-delete': 'yes'
-    },
+    headers: { Authorization: 'Bearer '+SECRET, 'x-confirm-delete': 'yes' },
     body: JSON.stringify({ folder: DOCS.folder })
   });
   const parent = DOCS.folder.includes('/') ? DOCS.folder.split('/').slice(0,-1).join('/') : '';
   await loadEntries(parent);
 });
 
-// Upload fichiers dans le dossier courant
 uploadDocBtn?.addEventListener('click', async ()=>{
   if (!docFileInput?.files?.length) return alert('Choisis un ou plusieurs fichiers');
   const fd = new FormData();
-  fd.append('folder', DOCS.folder); // "" pour racine
+  fd.append('folder', DOCS.folder);
   for (const f of docFileInput.files) fd.append('file', f);
   const r = await fetch(`${WORKER_URL}/docs/upload`, {
     method:'POST',
@@ -770,10 +792,9 @@ uploadDocBtn?.addEventListener('click', async ()=>{
   loadEntries();
 });
 
-// Init documents (affiche racine)
+// Init documents (racine)
 (async function initDocs(){
-  console.log('[docs] init → racine');
-  await loadEntries('');   // charge la racine
+  await loadEntries('');
 })();
 
 // ===== Dashboard numbers =====
