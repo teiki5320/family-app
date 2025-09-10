@@ -586,37 +586,41 @@ async function loadEntries(folderPath = DOCS.folder) {
   renderFiles();
 }
 
-// Grille des dossiers (avec fil d’Ariane)
+// Grille des dossiers (avec fil d’Ariane seulement en sous-dossier)
 function renderFolderGrid() {
   if (!folderGrid) return;
   folderGrid.innerHTML = '';
 
-  const crumbs = DOCS.folder ? DOCS.folder.split('/') : [];
-  const trail = document.createElement('div');
-  trail.className = 'row';
-  trail.style.marginBottom = '6px';
-  const homeBtn = document.createElement('button');
-  homeBtn.className = 'ghost';
-  homeBtn.textContent = '🏠 Racine';
-  homeBtn.onclick = () => loadEntries('');
-  trail.appendChild(homeBtn);
+  // Fil d’Ariane UNIQUEMENT si on n’est PAS à la racine
+  if (DOCS.folder) {
+    const crumbs = DOCS.folder.split('/');
+    const trail = document.createElement('div');
+    trail.className = 'row';
+    trail.style.marginBottom = '6px';
 
-  let acc = '';
-  crumbs.forEach((part) => {
-    const sep = document.createElement('span');
-    sep.style.opacity = .5; sep.style.margin = '0 6px'; sep.textContent = '/';
-    trail.appendChild(sep);
+    const homeBtn = document.createElement('button');
+    homeBtn.className = 'ghost';
+    homeBtn.textContent = '🏠 Racine';
+    homeBtn.onclick = () => loadEntries('');
+    trail.appendChild(homeBtn);
 
-    acc = acc ? acc + '/' + part : part;
-    const b = document.createElement('button');
-    b.className = 'ghost';
-    b.textContent = part;
-    b.onclick = () => loadEntries(acc);
-    trail.appendChild(b);
-  });
+    let acc = '';
+    crumbs.forEach((part) => {
+      const sep = document.createElement('span');
+      sep.style.opacity = .5; sep.style.margin = '0 6px'; sep.textContent = '/';
+      trail.appendChild(sep);
+      acc = acc ? acc + '/' + part : part;
+      const b = document.createElement('button');
+      b.className = 'ghost';
+      b.textContent = part;
+      b.onclick = () => loadEntries(acc);
+      trail.appendChild(b);
+    });
 
-  folderGrid.appendChild(trail);
+    folderGrid.appendChild(trail);
+  }
 
+  // Grille des sous-dossiers
   if (!DOCS.folders.length) {
     const empty = document.createElement('div');
     empty.className = 'muted';
@@ -628,8 +632,8 @@ function renderFolderGrid() {
 
     DOCS.folders.forEach(name => {
       const card = document.createElement('button');
-      card.className = 'tile';
-      card.style.alignItems = 'flex-start';
+      card.type = 'button';
+      card.className = 'folder-card';
       card.innerHTML = `
         <div class="icon">📁</div>
         <div class="title">${name}</div>
@@ -645,8 +649,9 @@ function renderFolderGrid() {
     folderGrid.appendChild(grid);
   }
 
-  if (filesArea) filesArea.style.display = 'block';
-  if (currentFolderName) currentFolderName.textContent = DOCS.folder || 'Racine';
+  // Zone fichiers : visible SEULEMENT à l’intérieur d’un dossier
+  if (filesArea) filesArea.style.display = DOCS.folder ? 'block' : 'none';
+  if (currentFolderName && DOCS.folder) currentFolderName.textContent = DOCS.folder;
 }
 
 // Grille de fichiers (vignettes)
