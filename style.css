@@ -181,8 +181,8 @@ button[type="submit"]:hover{ background:var(--primary-2); }
 
 /* -------- Documents -------- */
 
-/* Grille responsive de dossiers */
-.folder-grid{
+/* Grille responsive de dossiers (cible l'ID #folderGrid de ton HTML) */
+#folderGrid{
   display:grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap:12px;
