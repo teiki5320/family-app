@@ -708,17 +708,24 @@ function renderFiles() {
 
 /* ----------- ACTIONS ----------- */
 
-// Créer un (sous-)dossier dans le dossier courant
 createFolderBtn?.addEventListener('click', async ()=>{
   const name = (newFolderName?.value || '').trim();
   if (!name) return alert('Nom de dossier vide');
-  await docsFetchJSON(`${WORKER_URL}/docs/mkdir`, {
-    method: 'POST',
-    headers: { Authorization: 'Bearer '+SECRET },
-    body: JSON.stringify({ name, parent: DOCS.folder })
-  });
-  newFolderName.value = '';
-  loadEntries(); // on reste dans le dossier courant
+
+  try{
+    console.log('[mkdir] start', { name, parent: DOCS.folder });
+    const res = await docsFetchJSON(`${WORKER_URL}/docs/mkdir`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer '+SECRET },
+      body: JSON.stringify({ name, parent: DOCS.folder }) // parent="" à la racine
+    });
+    console.log('[mkdir] ok', res);
+    newFolderName.value = '';
+    await loadEntries(DOCS.folder); // rafraîchit la grille
+  }catch(e){
+    console.error('[mkdir] fail', e);
+    alert('Création impossible : ' + (e?.message || e));
+  }
 });
 
 // Supprimer le dossier courant (récursif)
