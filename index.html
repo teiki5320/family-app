@@ -7,19 +7,19 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Famille · App</title>
 
-  <!-- PWA -->
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#0a0a0d">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
-
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
 
+<body>
 <header class="app-header">
-  <!-- NOUVEAU : bouton retour accueil -->
-  <button id="homeBtn" class="home-btn" aria-label="Aller à l’accueil">🏠</button>
+  <button id="btnHome" class="home-btn" title="Accueil">🏠</button>
   <h1>Famille</h1>
+  <div class="header-actions">
+    <button class="ghost" id="btnSettings" title="Paramètres (à venir)">⚙️</button>
+  </div>
 </header>
 
 <main>
@@ -29,14 +29,11 @@
       <div class="hero">
         <div class="hero-top">
           <div class="chip">INFO</div>
-          <button class="hero-gear" title="Paramètres (à venir)">⚙️</button>
         </div>
-        <h3>Bienvenue, famille 👋</h3>
+        <h3>Bienvenue 👋</h3>
         <p class="hero-text">Accès rapide à vos listes, agenda, budgets, documents, messages…</p>
-        <div class="hero-dots"><span class="dot active"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
       </div>
 
-      <!-- Grille de tuiles -->
       <div class="tiles">
         <button class="tile" data-tab="tasks">
           <div class="icon">📝</div>
@@ -68,19 +65,19 @@
           <div class="subtitle">Dossiers & fichiers</div>
         </button>
 
-        <button class="tile" data-tab="vehicule">
-          <div class="icon">🚗</div>
-          <div class="title">Véhicule</div>
-          <div class="subtitle">Entretien & docs</div>
-        </button>
-
-        <button class="tile" data-tab="sante">
-          <div class="icon">🩺</div>
+        <button class="tile" data-tab="health">
+          <div class="icon">⚕️</div>
           <div class="title">Santé</div>
-          <div class="subtitle">RDV & dossiers</div>
+          <div class="subtitle">Carnets & vaccins</div>
         </button>
 
-        <button class="tile" data-external="messages">
+        <button class="tile" data-tab="vehicles">
+          <div class="icon">🚗</div>
+          <div class="title">Véhicules</div>
+          <div class="subtitle">Fiches & entretiens</div>
+        </button>
+
+        <button class="tile" data-tab="chat">
           <div class="icon">💬</div>
           <div class="title">Messages</div>
           <div class="subtitle">Chat familial</div>
@@ -96,7 +93,7 @@
   </section>
 
   <!-- Tâches -->
-  <section id="tasks" class="panel" role="tabpanel">
+  <section id="tasks" class="panel">
     <h2>Tâches</h2>
     <form id="taskForm" class="row">
       <input id="taskInput" type="text" placeholder="Ex: Acheter du lait…" required>
@@ -114,7 +111,7 @@
   </section>
 
   <!-- Budget -->
-  <section id="budget" class="panel" role="tabpanel">
+  <section id="budget" class="panel">
     <h2>Budget</h2>
     <form id="txForm" class="row">
       <input id="txLabel" type="text" placeholder="Libellé (ex: Courses)" required>
@@ -134,9 +131,8 @@
   </section>
 
   <!-- Météo -->
-  <section id="weather" class="panel" role="tabpanel">
+  <section id="weather" class="panel">
     <h2>Météo</h2>
-
     <div class="wx-now">
       <div class="wx-main">
         <div class="wx-emoji" id="wxEmoji">⛅</div>
@@ -147,12 +143,11 @@
       </div>
       <div class="wx-place" id="wxPlace">Localisation…</div>
     </div>
-
     <ul class="list" id="wxDaily"></ul>
   </section>
 
   <!-- Notes -->
-  <section id="notes" class="panel" role="tabpanel">
+  <section id="notes" class="panel">
     <h2>Notes</h2>
     <textarea id="notesArea" rows="12" placeholder="Tes notes ici…"></textarea>
     <div class="row row-end">
@@ -161,9 +156,8 @@
   </section>
 
   <!-- Calendrier -->
-  <section id="calendar" class="panel" role="tabpanel">
+  <section id="calendar" class="panel">
     <h2>Calendrier familial</h2>
-
     <div class="row" style="flex-wrap:wrap;gap:10px;align-items:center">
       <div class="cal-controls">
         <button id="calPrev" class="ghost">◀︎</button>
@@ -181,9 +175,7 @@
         <option value="Autre">Autre</option>
       </select>
     </div>
-
     <div id="calGrid" class="cal-grid"></div>
-
     <form id="eventForm" class="row" style="flex-wrap:wrap; gap:10px; margin-top:15px">
       <input id="eventTitle"  type="text"  placeholder="Titre (ex: RDV pédiatre)" required style="flex:1 1 260px">
       <input id="eventDate"   type="date"   required style="flex:0 0 180px">
@@ -199,16 +191,15 @@
       <div class="spacer"></div>
       <button type="submit">Ajouter</button>
     </form>
-
     <ul id="eventList" class="list"></ul>
   </section>
 
   <!-- Documents -->
-  <section id="docs" class="panel" role="tabpanel">
+  <section id="docs" class="panel">
     <h2>Documents</h2>
 
     <!-- Création dossier -->
-    <div class="row" style="gap:10px; flex-wrap:wrap">
+    <div class="row" id="docsRootTools" style="gap:10px; flex-wrap:wrap">
       <input id="newFolderName" type="text" placeholder="Nouveau dossier (ex: École)" style="flex:1 1 260px">
       <button id="createFolderBtn">Créer dossier</button>
     </div>
@@ -218,64 +209,77 @@
 
     <hr class="sep">
 
-    <!-- Zone fichiers du dossier sélectionné -->
+    <!-- Zone fichiers -->
     <div id="filesArea" class="files-area" style="display:none">
       <div class="row" style="align-items:center; gap:10px; flex-wrap:wrap">
         <h3 id="currentFolderName" style="margin:0">Dossier</h3>
         <div class="spacer"></div>
         <button id="deleteFolderBtn" class="ghost">Supprimer ce dossier</button>
       </div>
-
-      <div class="row" style="gap:10px; flex-wrap:wrap; margin-top:10px">
+      <div class="row" id="fileBar" style="gap:10px; flex-wrap:wrap; margin-top:10px">
         <input id="docFile" type="file" multiple>
         <button id="uploadDocBtn">Ajouter au dossier</button>
       </div>
-
-      <!-- Grille des fichiers (vignettes) -->
       <div id="docGrid" class="file-grid"></div>
     </div>
   </section>
 
-  <!-- Véhicule -->
-  <section id="vehicule" class="panel" role="tabpanel">
-    <h2>Véhicule</h2>
-    <div class="cards">
-      <div class="card"><div class="muted">Prochain entretien</div><div class="big" id="carNextService">--</div></div>
-      <div class="card"><div class="muted">Contrôle technique</div><div class="big" id="carCT">--</div></div>
-    </div>
-    <ul class="list" id="carDocs">
-      <li class="item"><div><strong>Ajoute tes documents voiture</strong><div class="who">Assurance, carte grise, factures…</div></div></li>
-    </ul>
-  </section>
-
   <!-- Santé -->
-  <section id="sante" class="panel" role="tabpanel">
+  <section id="health" class="panel">
     <h2>Santé</h2>
-    <div class="cards">
-      <div class="card"><div class="muted">Prochain RDV</div><div class="big" id="healthNext">--</div></div>
-      <div class="card"><div class="muted">Vaccins</div><div class="big" id="healthVaccines">--</div></div>
-    </div>
-    <ul class="list" id="healthNotes">
-      <li class="item"><div><strong>Notes santé</strong><div class="who">Crée une catégorie "Santé" dans le calendrier.</div></div></li>
-    </ul>
+
+    <!-- Liste personnes -->
+    <div class="cards" id="healthPeople"></div>
+
+    <!-- Ajouter / éditer personne -->
+    <details class="box">
+      <summary>Ajouter une personne</summary>
+      <form id="healthAddForm" class="grid2">
+        <input name="name" placeholder="Prénom" required>
+        <input name="blood" placeholder="Groupe sanguin (ex: O+)">
+        <input name="allergies" placeholder="Allergies (séparées par ,)">
+        <input name="conditions" placeholder="Maladies chroniques (séparées par ,)">
+        <input name="doctor" placeholder="Médecin traitant">
+        <input name="emergency" placeholder="Contact d’urgence (nom · tel)">
+        <button type="submit">Ajouter</button>
+      </form>
+    </details>
   </section>
 
-  <!-- Messages (chat + fichiers) -->
-  <section id="chat" class="panel" role="tabpanel">
-    <h2>Chat familial</h2>
+  <!-- Véhicules -->
+  <section id="vehicles" class="panel">
+    <h2>Véhicules</h2>
 
+    <!-- Liste véhicules -->
+    <div class="cards" id="vehicleList"></div>
+
+    <!-- Ajouter véhicule -->
+    <details class="box">
+      <summary>Ajouter un véhicule</summary>
+      <form id="vehicleAddForm" class="grid2">
+        <input name="plate" placeholder="Immatriculation (ex: AB-123-CD)" required>
+        <input name="make" placeholder="Marque (ex: Peugeot)">
+        <input name="model" placeholder="Modèle (ex: 308)">
+        <input name="year" type="number" placeholder="Année (ex: 2018)">
+        <input name="vin" placeholder="VIN (optionnel)">
+        <input name="mileage" type="number" placeholder="Kilométrage actuel">
+        <button type="submit">Ajouter</button>
+      </form>
+    </details>
+  </section>
+
+  <!-- Messages -->
+  <section id="chat" class="panel">
+    <h2>Chat familial</h2>
     <div class="row">
       <input id="chatName" type="text" placeholder="Ton prénom (ex: Jean)">
       <div class="spacer"></div>
       <small class="muted">Privé • messages & fichiers 30 jours</small>
     </div>
-
     <div id="chatList" class="chat-messages"></div>
-
     <div class="row">
       <textarea id="chatInput" rows="2" placeholder="Écris un message… (Entrée = envoyer)"></textarea>
     </div>
-
     <div class="row">
       <input id="chatFile" type="file">
       <button id="chatUpload" class="ghost">Joindre</button>
