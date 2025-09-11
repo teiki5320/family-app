@@ -1,4 +1,6 @@
-// ===== Helpers & State =====
+// =======================
+// Helpers & State
+// =======================
 const $  = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
@@ -15,41 +17,45 @@ function save(){ localStorage.setItem(KEY, JSON.stringify(state)); }
 function fmtEUR(x){ return (x||0).toLocaleString('fr-FR',{style:'currency',currency:'EUR'}); }
 function pad(n){ return String(n).padStart(2,'0'); }
 
-// ===== Tabs (délégation d'événements) =====
+// =======================
+// Navigation entre panneaux
+// =======================
 function showPanel(id){
-  document.querySelectorAll('.tab').forEach(t=> t.classList.remove('active'));
   document.querySelectorAll('.panel').forEach(p=> p.classList.remove('active'));
-  const btn = document.querySelector(`.tab[data-tab="${id}"]`);
   const panel = document.getElementById(id);
-  if (btn) btn.classList.add('active');
   if (panel) panel.classList.add('active');
 }
-const tabsBar = document.querySelector('.tabs');
-if (tabsBar){
-  tabsBar.addEventListener('click', (e)=>{
-    const btn = e.target.closest('.tab');
-    if (!btn) return;
-    if (btn.id === 'menuTab') { e.preventDefault(); return; }
-    e.preventDefault();
-    const id = btn.dataset.tab;
-    if (id) showPanel(id);
-  });
+function goToTab(id){
+  if (!id) return;
+  showPanel(id);
+  // Petites actions contextuelles
+  if (id === 'calendar') {
+    selectedDate = null;
+    const f = $('#calFilter');  if (f) f.value = '*';
+    const s = $('#calSearch');  if (s) s.value = '';
+    renderEvents?.();
+  }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
-function goToTab(id){ if (id) showPanel(id); }
-(function ensureInitialTab(){
-  const current = document.querySelector('.tab.active[data-tab]');
-  showPanel(current ? current.dataset.tab : 'home');
-})();
+// Bouton "maison" : retour Accueil depuis n’importe où
+$('#homeBtn')?.addEventListener('click', (e)=>{ e.preventDefault(); goToTab('home'); });
 
-// Quand on ouvre l'onglet Calendrier : on remet les filtres à zéro
-document.querySelector('.tab[data-tab="calendar"]')?.addEventListener('click', ()=>{
-  selectedDate = null;
-  const f = document.getElementById('calFilter');  if (f) f.value = '*';
-  const s = document.getElementById('calSearch');  if (s) s.value = '';
-  renderEvents?.();
+// Tuiles de la page d’accueil
+$$('.tile[data-tab]')?.forEach(t=> t.addEventListener('click', ()=> goToTab(t.dataset.tab)));
+$$('.tile[data-external]')?.forEach(t=>{
+  t.addEventListener('click', ()=>{
+    const map = { docs:'#docs', messages:'#chat' };
+    const url = map[t.dataset.external] || '#';
+    if (url.startsWith('#')) goToTab(url.slice(1)); else window.open(url, '_blank');
+  });
 });
 
-// ===== MENU (Clic&miam du jour) =====
+// Panneau initial
+showPanel('home');
+
+// =======================
+// MENU (Clic&miam du jour)
+// =======================
 const MENU_PREFIX = "https://clicetmiam.fr/mesmenus/5387/5765/";
 const tz = "Europe/Paris";
 function partsFromDate(d){
@@ -61,20 +67,11 @@ function buildMenuUrl(d){
   const { yyyy, mm, dd } = partsFromDate(d);
   return MENU_PREFIX + `${yyyy}/${mm}/${dd}Menu`;
 }
-$('#menuTab')?.addEventListener('click', (e)=>{ e.preventDefault(); window.open(buildMenuUrl(new Date()), '_blank'); });
 $('#tileMenu')?.addEventListener('click', ()=> window.open(buildMenuUrl(new Date()), '_blank'));
 
-// ===== Dashboard interactions (tuiles) =====
-document.querySelectorAll('.tile[data-tab]')?.forEach(t=> t.addEventListener('click', ()=> goToTab(t.dataset.tab)));
-document.querySelectorAll('.tile[data-external]')?.forEach(t=>{
-  t.addEventListener('click', ()=>{
-    const map = { docs:'#docs', messages:'#chat' };
-    const url = map[t.dataset.external] || '#';
-    if (url.startsWith('#')) goToTab(url.slice(1)); else window.open(url, '_blank');
-  });
-});
-
-// ===== TÂCHES =====
+// =======================
+// TÂCHES
+// =======================
 const taskForm = $('#taskForm'), taskInput = $('#taskInput'), taskWho = $('#taskWho');
 const taskList = $('#taskList'), clearDoneBtn = $('#clearDone');
 
@@ -108,7 +105,9 @@ taskForm?.addEventListener('submit', (e)=>{
 });
 clearDoneBtn?.addEventListener('click', ()=>{ state.tasks = state.tasks.filter(t=>!t.done); save(); renderTasks(); });
 
-// ===== BUDGET =====
+// =======================
+// BUDGET
+// =======================
 const txForm = $('#txForm'), txLabel = $('#txLabel'), txAmount = $('#txAmount'), txType = $('#txType');
 const txList = $('#txList');
 function renderBudget(){
@@ -142,7 +141,9 @@ txForm?.addEventListener('submit',(e)=>{
   txLabel.value=''; txAmount.value=''; save(); renderBudget();
 });
 
-// ===== NOTES =====
+// =======================
+// NOTES
+// =======================
 const notesArea = $('#notesArea'), notesSaved = $('#notesSaved');
 function renderNotes(){
   if(!notesArea) return;
@@ -158,7 +159,9 @@ notesArea?.addEventListener('input', ()=>{
   }
 });
 
-// ===== MÉTÉO (Open-Meteo) =====
+// =======================
+// MÉTÉO (Open-Meteo)
+// =======================
 const LAT = 46.6403, LON = -1.1616; // adapte à ta ville
 const wxEmoji = $('#wxEmoji'), wxTemp = $('#wxTemp'), wxDesc = $('#wxDesc'), wxTile = $('#wxTile'), wxPlace = $('#wxPlace'), wxDaily = $('#wxDaily');
 
@@ -213,7 +216,9 @@ async function loadWeather(){
 loadWeather();
 setInterval(loadWeather, 2*60*60*1000);
 
-// ===== Chat + Fichiers (Cloudflare Worker) =====
+// =======================
+// Chat + Fichiers (Worker)
+// =======================
 const WORKER_URL = 'https://family-app.teiki5320.workers.dev';
 const SECRET = 'Partenaire85/';
 const ROOM   = 'family';
@@ -223,12 +228,12 @@ const SUB_URL         = `${WORKER_URL}/calendar.ics?token=Partenaire85/`;
 const WORKER_CAL_ADD  = `${WORKER_URL}/cal/add`;
 const WORKER_CAL_LIST = `${WORKER_URL}/cal/list`;
 
-const chatList   = document.getElementById('chatList');
-const chatInput  = document.getElementById('chatInput');
-const chatSend   = document.getElementById('chatSend');
-const chatFile   = document.getElementById('chatFile');
-const chatUpload = document.getElementById('chatUpload');
-const chatName   = document.getElementById('chatName');
+const chatList   = $('#chatList');
+const chatInput  = $('#chatInput');
+const chatSend   = $('#chatSend');
+const chatFile   = $('#chatFile');
+const chatUpload = $('#chatUpload');
+const chatName   = $('#chatName');
 
 const NAME_KEY = 'familyApp.chatName';
 if (chatName) chatName.value = localStorage.getItem(NAME_KEY) || '';
@@ -342,7 +347,9 @@ chatSend?.addEventListener('click', sendMessage);
 chatInput?.addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); }});
 refreshMessages(); setInterval(refreshMessages, 4000);
 
-// ===== CALENDRIER =====
+// =======================
+// CALENDRIER (local + Worker ICS)
+// =======================
 if (!Array.isArray(state.events)) state.events = [];
 const eventForm = $('#eventForm'), eventTitle = $('#eventTitle'), eventDate = $('#eventDate'), eventTime = $('#eventTime');
 
@@ -356,7 +363,7 @@ let calMonth = new Date().getMonth();
 let calYear  = new Date().getFullYear();
 
 function renderMonth(y,m){
-  const grid = document.getElementById('calGrid');
+  const grid = $('#calGrid');
   if(!grid) return;
   grid.innerHTML='';
 
@@ -365,7 +372,7 @@ function renderMonth(y,m){
   const daysInMonth = new Date(y,m+1,0).getDate();
 
   const monthLabel = new Intl.DateTimeFormat('fr-FR',{month:'long',year:'numeric'}).format(first);
-  const calMonthLabel = document.getElementById('calMonthLabel');
+  const calMonthLabel = $('#calMonthLabel');
   if (calMonthLabel) calMonthLabel.textContent = monthLabel;
 
   for(let i=0;i<start;i++){ grid.appendChild(document.createElement('div')); }
@@ -396,15 +403,15 @@ function renderMonth(y,m){
     grid.appendChild(cell);
   }
 }
-document.getElementById('calPrev')?.addEventListener('click', ()=>{
+$('#calPrev')?.addEventListener('click', ()=>{
   if(--calMonth<0){ calMonth=11; calYear--; }
   renderMonth(calYear,calMonth);
 });
-document.getElementById('calNext')?.addEventListener('click', ()=>{
+$('#calNext')?.addEventListener('click', ()=>{
   if(++calMonth>11){ calMonth=0; calYear++; }
   renderMonth(calYear,calMonth);
 });
-document.getElementById('calToday')?.addEventListener('click', ()=>{
+$('#calToday')?.addEventListener('click', ()=>{
   const now = new Date();
   calMonth = now.getMonth();
   calYear  = now.getFullYear();
@@ -412,13 +419,13 @@ document.getElementById('calToday')?.addEventListener('click', ()=>{
   renderMonth(calYear, calMonth);
   renderEvents();
 });
-document.getElementById('calFilter')?.addEventListener('change', renderEvents);
-document.getElementById('calSearch')?.addEventListener('input', renderEvents);
+$('#calFilter')?.addEventListener('change', renderEvents);
+$('#calSearch')?.addEventListener('input', renderEvents);
 
 function renderEvents(){
-  const filter = document.getElementById('calFilter')?.value || '*';
-  const search = (document.getElementById('calSearch')?.value||'').toLowerCase();
-  const list = document.getElementById('eventList');
+  const filter = $('#calFilter')?.value || '*';
+  const search = ($('#calSearch')?.value||'').toLowerCase();
+  const list = $('#eventList');
   if(!list) return;
   list.innerHTML='';
 
@@ -478,13 +485,15 @@ eventForm?.addEventListener('submit', async (e)=>{
     title,
     date: eventDate.value,
     time: eventTime?.value || '09:00',
-    place: (document.getElementById('eventPlace')?.value || ''),
-    category: (document.getElementById('eventCategory')?.value || 'Autre'),
-    note: (document.getElementById('eventNote')?.value || '')
+    place: ($('#eventPlace')?.value || ''),
+    category: ($('#eventCategory')?.value || 'Autre'),
+    note: ($('#eventNote')?.value || '')
   };
 
+  // local
   state.events.push(ev); save(); renderEvents(); eventForm.reset();
 
+  // Worker
   try{
     const r = await fetch(WORKER_CAL_ADD, {
       method:'POST',
@@ -530,18 +539,20 @@ async function syncFromWorker(){
   syncFromWorker();
 })();
 
-// ===== DOCUMENTS (Cloudflare R2 via Worker, dossiers imbriqués) =====
+// =======================
+// DOCUMENTS (R2 via Worker) -- dossiers imbriqués
+// =======================
 
 // UI
-const folderGrid        = document.getElementById('folderGrid');
-const filesArea         = document.getElementById('filesArea');
-const currentFolderName = document.getElementById('currentFolderName');
-const newFolderName     = document.getElementById('newFolderName');
-const createFolderBtn   = document.getElementById('createFolderBtn');
-const deleteFolderBtn   = document.getElementById('deleteFolderBtn');
-const docFileInput      = document.getElementById('docFile');
-const uploadDocBtn      = document.getElementById('uploadDocBtn');
-const docGrid           = document.getElementById('docGrid');
+const folderGrid        = $('#folderGrid');
+const filesArea         = $('#filesArea');
+const currentFolderName = $('#currentFolderName');
+const newFolderName     = $('#newFolderName');
+const createFolderBtn   = $('#createFolderBtn');
+const deleteFolderBtn   = $('#deleteFolderBtn');
+const docFileInput      = $('#docFile');
+const uploadDocBtn      = $('#uploadDocBtn');
+const docGrid           = $('#docGrid');
 
 // État documents
 const DOCS = { folder:'', folders:[], files:[] };
@@ -590,13 +601,12 @@ async function loadEntries(folderPath = DOCS.folder) {
 function renderFolderGrid() {
   if (!folderGrid) return;
 
-  // --- 1) On transforme folderGrid en grille
   folderGrid.innerHTML = '';
   folderGrid.style.display = 'grid';
   folderGrid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(180px, 1fr))';
   folderGrid.style.gap = '12px';
 
-  // --- 2) Fil d’Ariane en haut (occupe toute la largeur)
+  // Fil d’Ariane (toute largeur)
   const trail = document.createElement('div');
   trail.className = 'row';
   trail.style.gridColumn = '1 / -1';
@@ -612,9 +622,7 @@ function renderFolderGrid() {
   let acc = '';
   crumbs.forEach((part) => {
     const sep = document.createElement('span');
-    sep.style.opacity = .5;
-    sep.style.margin = '0 6px';
-    sep.textContent = '/';
+    sep.style.opacity = .5; sep.style.margin = '0 6px'; sep.textContent = '/';
     trail.appendChild(sep);
 
     acc = acc ? acc + '/' + part : part;
@@ -627,7 +635,7 @@ function renderFolderGrid() {
 
   folderGrid.appendChild(trail);
 
-  // --- 3) Cartes de dossiers
+  // Cartes de dossiers
   if (!DOCS.folders.length) {
     const empty = document.createElement('div');
     empty.className = 'muted';
@@ -653,7 +661,7 @@ function renderFolderGrid() {
     });
   }
 
-  // --- 4) Affichage zone fichiers uniquement si on est DANS un dossier
+  // Zone fichiers visible uniquement dans un dossier
   if (filesArea) filesArea.style.display = DOCS.folder ? 'block' : 'none';
   if (currentFolderName) currentFolderName.textContent = DOCS.folder || 'Racine';
 }
@@ -754,27 +762,25 @@ function renderFiles() {
   });
 }
 
-// Actions
-createFolderBtn?.addEventListener('click', async ()=>{
+// Actions Documents
+$('#createFolderBtn')?.addEventListener('click', async ()=>{
   const name = (newFolderName?.value || '').trim();
   if (!name) return alert('Nom de dossier vide');
 
   try{
-    const res = await docsFetchJSON(`${WORKER_URL}/docs/mkdir`, {
+    await docsFetchJSON(`${WORKER_URL}/docs/mkdir`, {
       method: 'POST',
       headers: { Authorization: 'Bearer '+SECRET },
       body: JSON.stringify({ name, parent: DOCS.folder })
     });
-    console.log('[mkdir] ok', res);
     newFolderName.value = '';
     await loadEntries(DOCS.folder);
   }catch(e){
-    console.error('[mkdir] fail', e);
     alert('Création impossible : ' + (e?.message || e));
   }
 });
 
-deleteFolderBtn?.addEventListener('click', async ()=>{
+$('#deleteFolderBtn')?.addEventListener('click', async ()=>{
   if (!DOCS.folder) return alert('Tu es à la racine (rien à supprimer).');
   if (!confirm(`Supprimer le dossier "${DOCS.folder}" et tout son contenu ?`)) return;
   await docsFetchJSON(`${WORKER_URL}/docs/rmdir`, {
@@ -786,7 +792,7 @@ deleteFolderBtn?.addEventListener('click', async ()=>{
   await loadEntries(parent);
 });
 
-uploadDocBtn?.addEventListener('click', async ()=>{
+$('#uploadDocBtn')?.addEventListener('click', async ()=>{
   if (!docFileInput?.files?.length) return alert('Choisis un ou plusieurs fichiers');
   const fd = new FormData();
   fd.append('folder', DOCS.folder);
@@ -806,12 +812,16 @@ uploadDocBtn?.addEventListener('click', async ()=>{
   await loadEntries('');
 })();
 
-// ===== Dashboard numbers =====
+// =======================
+// Dashboard (tuiles accueil)
+// =======================
 function updateDashboard(){
   const tasksCount = (state.tasks||[]).filter(t=>!t.done).length;
   $('#dashTasksCount') && ($('#dashTasksCount').textContent = String(tasksCount));
+
   let sumIn=0,sumOut=0; (state.tx||[]).forEach(t=>{ if(t.type==='+') sumIn+=t.amount; else sumOut+=t.amount; });
   $('#dashBalance') && ($('#dashBalance').textContent = fmtEUR(sumIn - sumOut));
+
   const evs = Array.isArray(state.events)? [...state.events] : [];
   evs.sort((a,b)=> (a.date+(a.time||'00:00')).localeCompare(b.date+(b.time||'00:00')));
   const nowISO = new Date().toISOString().slice(0,16);
@@ -820,7 +830,7 @@ function updateDashboard(){
   if (el) el.textContent = next ? `${next.title} -- ${new Date(next.date+'T'+(next.time||'09:00')).toLocaleString('fr-FR')}` : 'Pas d’évènement';
 }
 
-// ===== Initial render =====
+// Renders initiaux
 renderTasks();
 renderBudget();
 renderNotes();
