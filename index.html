@@ -6,15 +6,20 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Famille · App</title>
-  <link rel="stylesheet" href="style.css">
 
+  <!-- PWA -->
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#0a0a0d">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
+
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
 <header class="app-header">
-  <h1>🏠 Famille</h1>
+  <!-- NOUVEAU : bouton retour accueil -->
+  <button id="homeBtn" class="home-btn" aria-label="Aller à l’accueil">🏠</button>
+  <h1>Famille</h1>
 </header>
 
 <main>
@@ -28,8 +33,10 @@
         </div>
         <h3>Bienvenue, famille 👋</h3>
         <p class="hero-text">Accès rapide à vos listes, agenda, budgets, documents, messages…</p>
+        <div class="hero-dots"><span class="dot active"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
       </div>
 
+      <!-- Grille de tuiles -->
       <div class="tiles">
         <button class="tile" data-tab="tasks">
           <div class="icon">📝</div>
@@ -61,7 +68,19 @@
           <div class="subtitle">Dossiers & fichiers</div>
         </button>
 
-        <button class="tile" data-tab="chat">
+        <button class="tile" data-tab="vehicule">
+          <div class="icon">🚗</div>
+          <div class="title">Véhicule</div>
+          <div class="subtitle">Entretien & docs</div>
+        </button>
+
+        <button class="tile" data-tab="sante">
+          <div class="icon">🩺</div>
+          <div class="title">Santé</div>
+          <div class="subtitle">RDV & dossiers</div>
+        </button>
+
+        <button class="tile" data-external="messages">
           <div class="icon">💬</div>
           <div class="title">Messages</div>
           <div class="subtitle">Chat familial</div>
@@ -71,13 +90,6 @@
           <div class="icon">🍎</div>
           <div class="title">Menu</div>
           <div class="subtitle">Clic&miam du jour</div>
-        </button>
-
-        <!-- Nouveau bouton avec ton PNG -->
-        <button class="tile" data-tab="famille">
-          <img src="icons/famille.png" alt="Famille" class="tile-icon">
-          <div class="title">Famille</div>
-          <div class="subtitle">Accès rapide</div>
         </button>
       </div>
     </div>
@@ -124,6 +136,7 @@
   <!-- Météo -->
   <section id="weather" class="panel" role="tabpanel">
     <h2>Météo</h2>
+
     <div class="wx-now">
       <div class="wx-main">
         <div class="wx-emoji" id="wxEmoji">⛅</div>
@@ -134,6 +147,7 @@
       </div>
       <div class="wx-place" id="wxPlace">Localisation…</div>
     </div>
+
     <ul class="list" id="wxDaily"></ul>
   </section>
 
@@ -149,6 +163,7 @@
   <!-- Calendrier -->
   <section id="calendar" class="panel" role="tabpanel">
     <h2>Calendrier familial</h2>
+
     <div class="row" style="flex-wrap:wrap;gap:10px;align-items:center">
       <div class="cal-controls">
         <button id="calPrev" class="ghost">◀︎</button>
@@ -166,7 +181,9 @@
         <option value="Autre">Autre</option>
       </select>
     </div>
+
     <div id="calGrid" class="cal-grid"></div>
+
     <form id="eventForm" class="row" style="flex-wrap:wrap; gap:10px; margin-top:15px">
       <input id="eventTitle"  type="text"  placeholder="Titre (ex: RDV pédiatre)" required style="flex:1 1 260px">
       <input id="eventDate"   type="date"   required style="flex:0 0 180px">
@@ -182,44 +199,83 @@
       <div class="spacer"></div>
       <button type="submit">Ajouter</button>
     </form>
+
     <ul id="eventList" class="list"></ul>
   </section>
 
   <!-- Documents -->
   <section id="docs" class="panel" role="tabpanel">
     <h2>Documents</h2>
+
+    <!-- Création dossier -->
     <div class="row" style="gap:10px; flex-wrap:wrap">
       <input id="newFolderName" type="text" placeholder="Nouveau dossier (ex: École)" style="flex:1 1 260px">
       <button id="createFolderBtn">Créer dossier</button>
     </div>
+
+    <!-- Grille de dossiers -->
     <div id="folderGrid" class="folder-grid" style="margin-top:12px"></div>
+
     <hr class="sep">
+
+    <!-- Zone fichiers du dossier sélectionné -->
     <div id="filesArea" class="files-area" style="display:none">
       <div class="row" style="align-items:center; gap:10px; flex-wrap:wrap">
         <h3 id="currentFolderName" style="margin:0">Dossier</h3>
         <div class="spacer"></div>
         <button id="deleteFolderBtn" class="ghost">Supprimer ce dossier</button>
       </div>
+
       <div class="row" style="gap:10px; flex-wrap:wrap; margin-top:10px">
         <input id="docFile" type="file" multiple>
         <button id="uploadDocBtn">Ajouter au dossier</button>
       </div>
+
+      <!-- Grille des fichiers (vignettes) -->
       <div id="docGrid" class="file-grid"></div>
     </div>
   </section>
 
-  <!-- Messages -->
+  <!-- Véhicule -->
+  <section id="vehicule" class="panel" role="tabpanel">
+    <h2>Véhicule</h2>
+    <div class="cards">
+      <div class="card"><div class="muted">Prochain entretien</div><div class="big" id="carNextService">--</div></div>
+      <div class="card"><div class="muted">Contrôle technique</div><div class="big" id="carCT">--</div></div>
+    </div>
+    <ul class="list" id="carDocs">
+      <li class="item"><div><strong>Ajoute tes documents voiture</strong><div class="who">Assurance, carte grise, factures…</div></div></li>
+    </ul>
+  </section>
+
+  <!-- Santé -->
+  <section id="sante" class="panel" role="tabpanel">
+    <h2>Santé</h2>
+    <div class="cards">
+      <div class="card"><div class="muted">Prochain RDV</div><div class="big" id="healthNext">--</div></div>
+      <div class="card"><div class="muted">Vaccins</div><div class="big" id="healthVaccines">--</div></div>
+    </div>
+    <ul class="list" id="healthNotes">
+      <li class="item"><div><strong>Notes santé</strong><div class="who">Crée une catégorie "Santé" dans le calendrier.</div></div></li>
+    </ul>
+  </section>
+
+  <!-- Messages (chat + fichiers) -->
   <section id="chat" class="panel" role="tabpanel">
     <h2>Chat familial</h2>
+
     <div class="row">
       <input id="chatName" type="text" placeholder="Ton prénom (ex: Jean)">
       <div class="spacer"></div>
       <small class="muted">Privé • messages & fichiers 30 jours</small>
     </div>
+
     <div id="chatList" class="chat-messages"></div>
+
     <div class="row">
       <textarea id="chatInput" rows="2" placeholder="Écris un message… (Entrée = envoyer)"></textarea>
     </div>
+
     <div class="row">
       <input id="chatFile" type="file">
       <button id="chatUpload" class="ghost">Joindre</button>
