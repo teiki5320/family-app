@@ -8,29 +8,39 @@
   --danger:#ff6b6b;
   --ok:#9cff8a;
   --border:#1f2030;
+
+  --radius:12px;
+  --line: var(--border);
+  --header-h:56px; /* hauteur approx. de l’header collant */
 }
 
 *{ box-sizing:border-box; }
-html,body{ margin:0; height:100%; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif; }
+html,body{
+  margin:0; height:100%;
+  background:var(--bg); color:var(--text);
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;
+}
 
+/* ===== Header ===== */
 .app-header{
   position:sticky; top:0; z-index:10;
   display:flex; align-items:center; gap:10px;
-  padding:10px 14px; background:linear-gradient(180deg, rgba(10,10,13,.95), rgba(10,10,13,.85));
+  padding:10px 14px;
+  background:linear-gradient(180deg, rgba(10,10,13,.95), rgba(10,10,13,.85));
   border-bottom:1px solid var(--border);
   backdrop-filter: blur(8px);
 }
 .app-header h1{ margin:0; font-size:18px; font-weight:700; letter-spacing:.3px; }
-.home-btn{
-  font-size:20px; border:none; background:transparent; cursor:pointer; line-height:1;
-}
+.home-btn{ font-size:20px; border:none; background:transparent; cursor:pointer; line-height:1; color:var(--text); }
 .header-actions{ margin-left:auto; display:flex; gap:6px; }
 
+/* ===== Layout ===== */
 main{ padding:14px; max-width:980px; margin:0 auto; }
 .panel{ display:none; }
 .panel.active{ display:block; animation:fade .15s ease-out; }
 @keyframes fade{ from{opacity:.6; transform:translateY(2px);} to{opacity:1; transform:none;} }
 
+/* ===== Hero / Tiles ===== */
 .hero{
   background:linear-gradient(135deg, rgba(85,194,255,.15), rgba(56,225,185,.12));
   border:1px solid var(--border);
@@ -46,7 +56,8 @@ main{ padding:14px; max-width:980px; margin:0 auto; }
 }
 .tile{
   display:flex; flex-direction:column; align-items:flex-start; gap:6px;
-  border-radius:14px; padding:14px; background:var(--card); border:1px solid var(--border);
+  border-radius:14px; padding:14px;
+  background:var(--card); border:1px solid var(--border);
   cursor:pointer; text-align:left;
 }
 .tile:hover{ border-color:#2a2b40; background:linear-gradient(180deg, var(--card), #141522); }
@@ -54,7 +65,7 @@ main{ padding:14px; max-width:980px; margin:0 auto; }
 .tile .title{ font-weight:700; }
 .tile .subtitle{ color:var(--muted); font-size:12px; }
 
-/* Rows, forms, lists */
+/* ===== Rows, forms, lists ===== */
 .row{ display:flex; gap:10px; align-items:center; }
 .row-end{ justify-content:flex-end; }
 .spacer{ flex:1; }
@@ -71,6 +82,16 @@ button.secondary{ background:#111624; border-color:#1f2740; }
 button.del{ background:transparent; border-color:#2a1c1f; color:#ff9aa0; }
 button.del:hover{ background:#241317; }
 
+/* Boutons "système" unifiés */
+.btn{ border:1px solid var(--border); background:#0f1218; color:var(--text); border-radius:10px; padding:8px 12px; font-weight:600; }
+.btn:hover{ background:#121622; }
+.btn-primary{ background:var(--accent); border-color:transparent; color:#071319; }
+.btn-primary:hover{ background:#66caff; }
+.btn-danger{ background:transparent; border-color:rgba(255,107,107,.35); color:#ff9aa0; }
+.btn-danger:hover{ background:rgba(255,107,107,.12); }
+.badge{ display:inline-flex; align-items:center; gap:6px; height:36px; padding:0 12px; border-radius:10px; background:#0f1218; border:1px solid var(--border); }
+
+/* ===== List ===== */
 .list{ list-style:none; padding:0; margin:12px 0; }
 .item{
   border:1px solid var(--border); border-radius:12px; background:var(--card);
@@ -78,28 +99,65 @@ button.del:hover{ background:#241317; }
 }
 .item .who{ color:var(--muted); font-size:12px; }
 
-/* Cards & grids */
-.cards{ display:grid; gap:12px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+/* ===== Cards & grids ===== */
+.cards{
+  display:grid; gap:14px;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  align-content:start;
+}
 .card{
   border:1px solid var(--border); border-radius:12px; background:var(--card);
-  padding:12px;
+  padding:12px; display:flex; flex-direction:column;
 }
 .big{ font-size:22px; font-weight:700; }
 
-/* Calendrier */
+/* Header interne d’une carte (titre + actions alignées à droite) */
+.card-header{
+  display:flex; align-items:flex-start; justify-content:space-between;
+  gap:12px; margin-bottom:8px;
+}
+.card-title-wrap{ flex:1 1 auto; min-width:0; }
+.card-title{ margin:0; font-weight:700; font-size:1.06rem; }
+.card-meta{ margin-top:2px; color:var(--muted); font-size:.92rem; }
+.card-actions{ flex:0 0 auto; display:flex; gap:8px; }
+
+.card details{ margin-top:10px; }
+
+/* ===== Details / Summary (sections repliables) ===== */
+.box{
+  border:1px solid var(--border); border-radius:12px; background:var(--card);
+  margin-top:10px; overflow:hidden;
+}
+.box > summary{
+  list-style:none; cursor:pointer; padding:12px 12px; position:relative;
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  font-weight:600;
+}
+.box > summary::-webkit-details-marker{ display:none; }
+.box > summary::after{
+  content:"▸"; font-size:12px; opacity:.7; transition: transform .2s ease;
+}
+.box[open] > summary::after{ transform:rotate(90deg); }
+.section-body{ padding: 10px 12px 12px; border-top:1px solid var(--border); }
+.grid2{ display:grid; gap:10px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+
+/* ===== Calendrier ===== */
 .cal-grid{
   display:grid; grid-template-columns: repeat(7, 1fr); gap:6px; margin-top:10px;
 }
 .day{
-  border:1px solid var(--border); border-radius:10px; padding:8px; min-height:66px;
-  position:relative;
+  border:1px solid var(--border); border-radius:10px; padding:8px; min-height:66px; position:relative;
 }
 .day .num{ color:var(--muted); font-size:12px; }
 .day.today{ border-color:#2a2b40; }
 .day.selected{ outline:2px solid var(--accent); }
 .cal-month{ font-weight:700; }
+.cal-dot{
+  width:6px; height:6px; border-radius:50%; background:var(--accent);
+  position:absolute; bottom:8px; left:8px;
+}
 
-/* Documents */
+/* ===== Documents ===== */
 .folder-grid{
   display:grid; gap:12px; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
 }
@@ -119,13 +177,7 @@ button.del:hover{ background:#241317; }
 .file-card .meta{ color:var(--muted); font-size:12px; }
 .file-actions{ display:flex; gap:8px; }
 
-/* Santé / Véhicules */
-.box{
-  border:1px solid var(--border); border-radius:12px; background:var(--card); padding:10px; margin-top:10px;
-}
-.grid2{ display:grid; gap:10px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
-
-/* Chat */
+/* ===== Chat ===== */
 .chat-messages{
   border:1px solid var(--border); border-radius:12px; background:var(--card);
   padding:10px; height:300px; overflow:auto; margin:10px 0;
@@ -138,12 +190,12 @@ button.del:hover{ background:#241317; }
 .msg.me .bubble{ background:#101a22; border-color:#203547; }
 .meta{ color:var(--muted); font-size:12px; margin-top:4px; }
 
-/* Footer */
+/* ===== Footer ===== */
 .app-footer{ padding:18px 14px; color:#7b8190; text-align:center; border-top:1px solid var(--border); margin-top:20px; }
 
-/* Barre d'ajout collante (sombre) */
+/* ===== Barre d'ajout collante (sous l’en-tête) ===== */
 .addbar{
-  position: sticky; top: 0; z-index: 40;
+  position: sticky; top: var(--header-h); z-index: 5;
   display: grid; gap: 10px;
   grid-template-columns: repeat(auto-fit, minmax(180px,1fr));
   background: linear-gradient(180deg, rgba(16,18,23,.96), rgba(16,18,23,.86));
@@ -155,10 +207,3 @@ button.del:hover{ background:#241317; }
   backdrop-filter: saturate(120%) blur(6px);
 }
 .addbar .btn{ min-width:120px; }
-
-/* Grille des cartes dessous (si pas déjà fait) */
-.cards{
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px,1fr));
-  gap: 14px;
-}

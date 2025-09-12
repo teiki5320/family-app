@@ -1,10 +1,20 @@
-// ===== Helpers & State =====
+Voici app.js complet, propre, avec :
+	•	barres d’ajout collantes (tes formulaires existants),
+	•	grille de cartes cohérente,
+	•	header de carte avec actions à droite (.card-header, .card-actions),
+	•	ajouts en tête de liste (unshift) pour voir la carte immédiatement.
+
+Colle-le entièrement à la place de ton fichier actuel.
+
+// ===========================
+// Helpers & State
+// ===========================
 const $  = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
-const KEY = 'familyApp.v2'; // <- nouveau namespace pour éviter l'ancien cache
+const KEY = 'familyApp.v2'; // nouveau namespace
 const DEFAULT_STATE = {
-  tasks:[], tx:[], notes:"", events:[],
+  tasks: [], tx: [], notes: "", events: [],
   health: { persons: [] },
   vehicles: { list: [] }
 };
@@ -18,22 +28,20 @@ try {
 function save(){ localStorage.setItem(KEY, JSON.stringify(state)); }
 function fmtEUR(x){ return (x||0).toLocaleString('fr-FR',{style:'currency',currency:'EUR'}); }
 function pad(n){ return String(n).padStart(2,'0'); }
-function todayISO(){
-  const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-}
-function addDays(dStr, n){
-  const d = new Date(dStr); d.setDate(d.getDate()+n);
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-}
+function todayISO(){ const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function addDays(dStr, n){ const d = new Date(dStr); d.setDate(d.getDate()+n); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function escapeHTML(s){ return (s||'').replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+function uid(){ return Math.random().toString(36).slice(2,9); }
 
-// ===== Navigation (tuiles + bouton maison) =====
+// ===========================
+// Navigation (tuiles + bouton maison)
+// ===========================
 function showPanel(id){
   $$('.panel').forEach(p=> p.classList.remove('active'));
   $('#'+id)?.classList.add('active');
 }
 function goToTab(id){ if (id) showPanel(id); }
 $('#btnHome')?.addEventListener('click', ()=> goToTab('home'));
-
 $$('.tile[data-tab]')?.forEach(t=> t.addEventListener('click', ()=> goToTab(t.dataset.tab)));
 
 const MENU_PREFIX = "https://clicetmiam.fr/mesmenus/5387/5765/";
@@ -49,14 +57,16 @@ function buildMenuUrl(d){
 }
 $('#tileMenu')?.addEventListener('click', ()=> window.open(buildMenuUrl(new Date()), '_blank'));
 
-// ===== Worker (chat/docs/cal) =====
+// ===========================
+// Worker (chat/docs/cal)
+// ===========================
 const WORKER_URL = 'https://family-app.teiki5320.workers.dev';
 const SECRET = 'Partenaire85/';
 const ROOM   = 'family';
 const WORKER_CAL_ADD  = `${WORKER_URL}/cal/add`;
 const WORKER_CAL_LIST = `${WORKER_URL}/cal/list`;
 
-// Helper calendrier
+// Helper calendrier (remote)
 async function addToCalendar({ title, date, time='09:00', place='', category='Autre', note='' }){
   try{
     await fetch(WORKER_CAL_ADD, {
@@ -67,7 +77,8 @@ async function addToCalendar({ title, date, time='09:00', place='', category='Au
   }catch(e){ /* silencieux */ }
 }
 
-// ===== Dashboard =====
+// ===========================
+/* Dashboard */
 function updateDashboard(){
   const tasksCount = (state.tasks||[]).filter(t=>!t.done).length;
   $('#dashTasksCount') && ($('#dashTasksCount').textContent = String(tasksCount));
@@ -83,7 +94,9 @@ function updateDashboard(){
   if (el) el.textContent = next ? `${next.title} -- ${new Date(next.date+'T'+(next.time||'09:00')).toLocaleString('fr-FR')}` : 'Pas d’évènement';
 }
 
-// ===== TÂCHES =====
+// ===========================
+// TÂCHES
+// ===========================
 const taskForm = $('#taskForm'), taskInput = $('#taskInput'), taskWho = $('#taskWho');
 const taskList = $('#taskList'), clearDoneBtn = $('#clearDone');
 
@@ -96,8 +109,8 @@ function renderTasks(){
     li.innerHTML = `
       <input type="checkbox" ${t.done ? 'checked' : ''} aria-label="Terminer">
       <div>
-        <div>${t.text}</div>
-        <div class="who">${t.who || 'Tous'}</div>
+        <div>${escapeHTML(t.text)}</div>
+        <div class="who">${escapeHTML(t.who || 'Tous')}</div>
       </div>
       <div class="spacer"></div>
       <button class="del" aria-label="Supprimer">Suppr</button>
@@ -117,7 +130,9 @@ taskForm?.addEventListener('submit', (e)=>{
 });
 clearDoneBtn?.addEventListener('click', ()=>{ state.tasks = state.tasks.filter(t=>!t.done); save(); renderTasks(); });
 
-// ===== BUDGET =====
+// ===========================
+// BUDGET
+// ===========================
 const txForm = $('#txForm'), txLabel = $('#txLabel'), txAmount = $('#txAmount'), txType = $('#txType');
 const txList = $('#txList');
 function renderBudget(){
@@ -129,7 +144,7 @@ function renderBudget(){
     const li = document.createElement('li');
     li.className = 'item';
     li.innerHTML = `
-      <div><strong>${t.label}</strong><div class="who">${new Date(t.ts).toLocaleDateString('fr-FR')}</div></div>
+      <div><strong>${escapeHTML(t.label)}</strong><div class="who">${new Date(t.ts).toLocaleDateString('fr-FR')}</div></div>
       <div class="spacer"></div>
       <div>${t.type==='+'?'+':''}${fmtEUR(t.amount)}</div>
       <button class="del">Suppr</button>
@@ -151,7 +166,9 @@ txForm?.addEventListener('submit',(e)=>{
   txLabel.value=''; txAmount.value=''; save(); renderBudget();
 });
 
-// ===== NOTES =====
+// ===========================
+// NOTES
+// ===========================
 const notesArea = $('#notesArea'), notesSaved = $('#notesSaved');
 function renderNotes(){
   if(!notesArea) return;
@@ -167,18 +184,14 @@ notesArea?.addEventListener('input', ()=>{
   }
 });
 
-// ===== MÉTÉO =====
+// ===========================
+// MÉTÉO
+// ===========================
 const LAT = 46.6403, LON = -1.1616;
 const wxEmoji = $('#wxEmoji'), wxTemp = $('#wxTemp'), wxDesc = $('#wxDesc'), wxTile = $('#wxTile'), wxPlace = $('#wxPlace'), wxDaily = $('#wxDaily');
 function codeToWeather(code){
-  const map = {
-    0:"Ciel dégagé", 1:"Peu nuageux", 2:"Partiellement nuageux", 3:"Couvert",
-    45:"Brouillard", 48:"Brouillard givrant",
-    51:"Bruine légère", 53:"Bruine", 55:"Bruine forte",
-    61:"Pluie faible", 63:"Pluie", 65:"Pluie forte",
-    71:"Neige faible", 73:"Neige", 75:"Neige forte",
-    95:"Orage", 96:"Orage avec grêle", 99:"Orage fort grêle"
-  }; return map[code] || "--";
+  const map = {0:"Ciel dégagé",1:"Peu nuageux",2:"Partiellement nuageux",3:"Couvert",45:"Brouillard",48:"Brouillard givrant",51:"Bruine légère",53:"Bruine",55:"Bruine forte",61:"Pluie faible",63:"Pluie",65:"Pluie forte",71:"Neige faible",73:"Neige",75:"Neige forte",95:"Orage",96:"Orage avec grêle",99:"Orage fort grêle"};
+  return map[code] || "--";
 }
 function codeToEmoji(code){
   const map = {0:"☀️",1:"🌤️",2:"⛅️",3:"☁️",45:"🌫️",48:"🌫️",51:"🌦️",53:"🌧️",55:"🌧️",61:"🌧️",63:"🌧️",65:"🌧️",71:"🌨️",73:"🌨️",75:"❄️",95:"⛈️",96:"⛈️",99:"⛈️"};
@@ -219,7 +232,9 @@ async function loadWeather(){
 loadWeather();
 setInterval(loadWeather, 2*60*60*1000);
 
-// ===== Chat (léger) =====
+// ===========================
+// Chat (léger)
+// ===========================
 const chatList   = $('#chatList');
 const chatInput  = $('#chatInput');
 const chatSend   = $('#chatSend');
@@ -232,7 +247,6 @@ if (chatName) chatName.value = localStorage.getItem(NAME_KEY) || '';
 chatName?.addEventListener('change', ()=> localStorage.setItem(NAME_KEY, (chatName.value||'').trim()));
 
 let lastTs = 0;
-function escapeHTML(s){ return (s||'').replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
 function linkify(t){ return escapeHTML(t).replace(/https?:\/\/\S+/g, m => `<a href="${m}" target="_blank" rel="noopener">${m}</a>`); }
 function scrollBottom(){ if (chatList) chatList.scrollTop = chatList.scrollHeight; }
 function renderMessages(msgs){
@@ -299,7 +313,9 @@ chatSend?.addEventListener('click', sendMessage);
 chatInput?.addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); }});
 refreshMessages(); setInterval(refreshMessages, 4000);
 
-// ===== CALENDRIER (local + sync Worker) =====
+// ===========================
+// CALENDRIER (local + sync Worker)
+// ===========================
 if (!Array.isArray(state.events)) state.events = [];
 const eventForm = $('#eventForm'), eventTitle = $('#eventTitle'), eventDate = $('#eventDate'), eventTime = $('#eventTime');
 
@@ -350,8 +366,8 @@ function renderEvents(){
     const when = `${ev.date} ${ev.time||''}`.trim();
     li.innerHTML = `
       <div>
-        <strong>${ev.title}</strong>
-        <div class="who">${when}${ev.place?` · ${ev.place}`:''} [${ev.category||'Autre'}]</div>
+        <strong>${escapeHTML(ev.title)}</strong>
+        <div class="who">${escapeHTML(when)}${ev.place?` · ${escapeHTML(ev.place)}`:''} [${escapeHTML(ev.category||'Autre')}]</div>
       </div>
       <div class="spacer"></div>
       <button class="del" aria-label="Supprimer">Suppr</button>
@@ -400,7 +416,9 @@ eventForm?.addEventListener('submit', async (e)=>{
   }catch(e){}
 })();
 
-// ===== DOCUMENTS (R2 via Worker) =====
+// ===========================
+// DOCUMENTS (R2 via Worker)
+// ===========================
 const folderGrid        = $('#folderGrid');
 const filesArea         = $('#filesArea');
 const currentFolderName = $('#currentFolderName');
@@ -432,8 +450,7 @@ async function loadEntries(folderPath = DOCS.folder) {
   DOCS.files   = data.files   || [];
   renderFolderGrid(); renderFiles();
 }
-// expose pour Santé/Véhicules
-window.loadEntries = loadEntries;
+window.loadEntries = loadEntries; // expose pour Santé/Véhicules
 
 function renderFolderGrid() {
   if (!folderGrid) return;
@@ -556,7 +573,9 @@ uploadDocBtn?.addEventListener('click', async ()=>{
 });
 (async function initDocs(){ await loadEntries(''); })();
 
-// ===== SANTÉ =====
+// ===========================
+// SANTÉ
+// ===========================
 const healthPeople = $('#healthPeople');
 const healthAddForm = $('#healthAddForm');
 
@@ -567,68 +586,78 @@ function renderHealth(){
   if (!persons.length){
     const empty = document.createElement('div');
     empty.className = 'card';
-    empty.innerHTML = `<strong>Aucune personne</strong><div class="muted">Ajoute une personne ci-dessous.</div>`;
+    empty.innerHTML = `<strong>Aucune personne</strong><div class="muted">Ajoute une personne ci-dessus.</div>`;
     healthPeople.appendChild(empty);
     return;
   }
 
   persons.forEach(p=>{
     const card = document.createElement('div'); card.className='card';
-    const warn = (p.allergies && p.allergies.length) ? ' · ⚠︎ Allergies' : '';
+
     card.innerHTML = `
-      <div class="row" style="align-items:flex-start">
-        <div>
-          <div style="font-weight:700">${p.name||'--'}</div>
-          <div class="muted">${p.blood||'--'}${warn}</div>
+      <div class="card-header">
+        <div class="card-title-wrap">
+          <h3 class="card-title">${escapeHTML(p.name||'--')}</h3>
+          <div class="card-meta">${escapeHTML(p.blood||'--')}${(p.allergies && p.allergies.length)?' · ⚠︎ Allergies':''}</div>
         </div>
-        <div class="spacer"></div>
-        <button class="ghost open-docs">📄 Dossier</button>
-        <button class="del del-person">Suppr</button>
+        <div class="card-actions">
+          <button class="badge open-docs">📂 Dossier</button>
+          <button class="btn btn-danger del-person">Suppr</button>
+        </div>
       </div>
 
-      <details class="box" style="margin-top:10px">
+      <details class="box">
         <summary>Infos clés</summary>
-        <div class="muted">Médecin : ${p.doctor||'--'} · Urgence : ${p.emergency||'--'}</div>
-        <div class="muted">Maladies : ${(p.conditions||[]).join(', ')||'--'}</div>
-        <div class="muted">Allergies : ${(p.allergies||[]).join(', ')||'--'}</div>
+        <div class="section-body">
+          <div class="meta">Médecin : ${escapeHTML(p.doctor||'--')} · Urgence : ${escapeHTML(p.emergency||'--')}</div>
+          <div class="meta">Maladies : ${escapeHTML((p.conditions||[]).join(', ')||'--')}</div>
+          <div class="meta">Allergies : ${escapeHTML((p.allergies||[]).join(', ')||'--')}</div>
+        </div>
       </details>
 
-      <details class="box" style="margin-top:10px">
+      <details class="box">
         <summary>Vaccins</summary>
-        <div id="vaccins-${p.id||p.name}"></div>
-        <form class="row add-vaccin" style="margin-top:8px">
-          <input name="name" placeholder="Nom vaccin (ex: DTP)">
-          <input name="last" type="date" placeholder="Dernière dose">
-          <input name="next" type="date" placeholder="Prochaine dose">
-          <button>Ajouter</button>
-        </form>
+        <div class="section-body">
+          <div id="vaccins-${p.id||p.name}"></div>
+          <form class="row add-vaccin" style="margin-top:8px">
+            <input name="name" placeholder="Nom vaccin (ex: DTP)">
+            <input name="last" type="date" placeholder="Dernière dose">
+            <input name="next" type="date" placeholder="Prochaine dose">
+            <button>Ajouter</button>
+          </form>
+        </div>
       </details>
 
-      <details class="box" style="margin-top:10px">
+      <details class="box">
         <summary>Traitements</summary>
-        <div id="meds-${p.id||p.name}"></div>
-        <form class="grid2 add-med" style="margin-top:8px">
-          <input name="name" placeholder="Nom (ex: Ventoline)">
-          <input name="dose" placeholder="Dose (ex: 2 bouffées)">
-          <input name="freq" placeholder="Fréquence (ex: si besoin)">
-          <input name="start" type="date" placeholder="Début">
-          <input name="end" type="date" placeholder="Fin (optionnel)">
-          <button>Ajouter</button>
-        </form>
+        <div class="section-body">
+          <div id="meds-${p.id||p.name}"></div>
+          <form class="grid2 add-med" style="margin-top:8px">
+            <input name="name" placeholder="Nom (ex: Ventoline)">
+            <input name="dose" placeholder="Dose (ex: 2 bouffées)">
+            <input name="freq" placeholder="Fréquence (ex: si besoin)">
+            <input name="start" type="date" placeholder="Début">
+            <input name="end" type="date" placeholder="Fin (optionnel)">
+            <button>Ajouter</button>
+          </form>
+        </div>
       </details>
 
-      <details class="box" style="margin-top:10px">
+      <details class="box">
         <summary>Carnet médical</summary>
-        <div id="records-${p.id||p.name}"></div>
-        <form class="grid2 add-record" style="margin-top:8px">
-          <input name="date" type="date" value="${todayISO()}">
-          <input name="type" placeholder="Type (Consultation, Analyse, …)">
-          <input name="title" placeholder="Titre (ex: Pédiatre)">
-          <input name="note" placeholder="Note">
-          <button>Ajouter</button>
-        </form>
+        <div class="section-body">
+          <div id="records-${p.id||p.name}"></div>
+          <form class="grid2 add-record" style="margin-top:8px">
+            <input name="date" type="date" value="${todayISO()}">
+            <input name="type" placeholder="Type (Consultation, Analyse, …)">
+            <input name="title" placeholder="Titre (ex: Pédiatre)">
+            <input name="note" placeholder="Note">
+            <button>Ajouter</button>
+          </form>
+        </div>
       </details>
     `;
+
     // actions
     card.querySelector('.open-docs')?.addEventListener('click', ()=>{
       goToTab('docs');
@@ -683,7 +712,7 @@ function renderVaccinsList(p){
   if (!list.length){ host.innerHTML = `<div class="muted">Aucun vaccin</div>`; return; }
   list.forEach((v,idx)=>{
     const row = document.createElement('div'); row.className='item';
-    row.innerHTML = `<div><strong>${v.name}</strong><div class="who">Dernière: ${v.last||'--'} · Prochaine: ${v.next||'--'}</div></div>
+    row.innerHTML = `<div><strong>${escapeHTML(v.name)}</strong><div class="who">Dernière: ${escapeHTML(v.last||'--')} · Prochaine: ${escapeHTML(v.next||'--')}</div></div>
     <div class="spacer"></div>
     ${v.next?`<button class="ghost sendCal">→ Calendrier</button>`:''}
     <button class="del">Suppr</button>`;
@@ -699,7 +728,7 @@ function renderMedsList(p){
   if (!list.length){ host.innerHTML = `<div class="muted">Aucun traitement</div>`; return; }
   list.forEach((m,idx)=>{
     const row = document.createElement('div'); row.className='item';
-    row.innerHTML = `<div><strong>${m.name}</strong><div class="who">${m.dose||'--'} · ${m.freq||'--'} · ${m.start||'--'} → ${m.end||'--'}</div></div>
+    row.innerHTML = `<div><strong>${escapeHTML(m.name)}</strong><div class="who">${escapeHTML(m.dose||'--')} · ${escapeHTML(m.freq||'--')} · ${escapeHTML(m.start||'--')} → ${escapeHTML(m.end||'--')}</div></div>
     <div class="spacer"></div><button class="del">Suppr</button>`;
     row.querySelector('.del')?.addEventListener('click', ()=>{ (p.meds||=[]).splice(idx,1); save(); renderMedsList(p); });
     host.appendChild(row);
@@ -712,7 +741,7 @@ function renderRecords(p){
   if (!list.length){ host.innerHTML = `<div class="muted">Aucune entrée</div>`; return; }
   list.forEach((r,idx)=>{
     const row = document.createElement('div'); row.className='item';
-    row.innerHTML = `<div><strong>${r.date} -- ${r.type||''}</strong><div class="who">${r.title||''} · ${r.note||''}</div></div>
+    row.innerHTML = `<div><strong>${escapeHTML(r.date)} -- ${escapeHTML(r.type||'')}</strong><div class="who">${escapeHTML(r.title||'')} · ${escapeHTML(r.note||'')}</div></div>
     <div class="spacer"></div><button class="del">Suppr</button>`;
     row.querySelector('.del')?.addEventListener('click', ()=>{ (p.records||=[]).splice(idx,1); save(); renderRecords(p); });
     host.appendChild(row);
@@ -723,7 +752,7 @@ healthAddForm?.addEventListener('submit', (e)=>{
   e.preventDefault();
   const fd = new FormData(healthAddForm);
   const p = {
-    id: (fd.get('name')||'').toLowerCase().replace(/\s+/g,'-'),
+    id: (fd.get('name')||'').toLowerCase().replace(/\s+/g,'-') || uid(),
     name: fd.get('name')||'',
     blood: fd.get('blood')||'',
     allergies: (fd.get('allergies')||'').split(',').map(s=>s.trim()).filter(Boolean),
@@ -733,11 +762,13 @@ healthAddForm?.addEventListener('submit', (e)=>{
     vaccines:[], meds:[], records:[]
   };
   if (!p.name) return;
-  (state.health.persons ||= []).push(p); save();
-  healthAddForm.reset(); renderHealth();
+  (state.health.persons ||= []).unshift(p); // en tête
+  save(); healthAddForm.reset(); renderHealth();
 });
 
-// ===== VÉHICULES =====
+// ===========================
+// VÉHICULES
+// ===========================
 const vehicleList = $('#vehicleList');
 const vehicleAddForm = $('#vehicleAddForm');
 
@@ -747,45 +778,54 @@ function renderVehicles(){
   const vs = state.vehicles?.list || [];
   if (!vs.length){
     const empty = document.createElement('div');
-    empty.className='card'; empty.innerHTML = `<strong>Aucun véhicule</strong><div class="muted">Ajoute un véhicule ci-dessous.</div>`;
+    empty.className='card';
+    empty.innerHTML = `<strong>Aucun véhicule</strong><div class="muted">Ajoute un véhicule ci-dessus.</div>`;
     vehicleList.appendChild(empty); return;
   }
 
   vs.forEach(v=>{
     const card = document.createElement('div'); card.className='card';
+
     card.innerHTML = `
-      <div class="row">
-        <div>
-          <div style="font-weight:700">${v.make||'--'} ${v.model||''}</div>
-          <div class="muted">${v.plate||''} · ${v.year||'--'} · ${v.mileage?`${v.mileage} km`:'--'}</div>
+      <div class="card-header">
+        <div class="card-title-wrap">
+          <h3 class="card-title">${escapeHTML(v.make||'--')} ${escapeHTML(v.model||'')}</h3>
+          <div class="card-meta">${escapeHTML(v.plate||'')} · ${escapeHTML(String(v.year||'--'))} · ${v.mileage?`${escapeHTML(String(v.mileage))} km`:'--'}</div>
+          ${v.vin ? `<div class="card-meta">VIN : ${escapeHTML(v.vin)}</div>` : ``}
         </div>
-        <div class="spacer"></div>
-        <button class="ghost open-docs">📄 Dossier</button>
-        <button class="del del-veh">Suppr</button>
+        <div class="card-actions">
+          <button class="badge open-docs">📂 Dossier</button>
+          <button class="btn btn-danger del-veh">Suppr</button>
+        </div>
       </div>
 
-      <details class="box" style="margin-top:10px">
+      <details class="box">
         <summary>Entretiens & rappels</summary>
-        <div id="maint-${v.id}"></div>
-        <form class="grid2 add-maint" style="margin-top:8px">
-          <input name="title" placeholder="Intitulé (ex: Vidange)">
-          <input name="date" type="date" value="${todayISO()}">
-          <input name="next" type="date" placeholder="Prochain (optionnel)">
-          <input name="km" type="number" placeholder="Km (optionnel)">
-          <button>Ajouter</button>
-        </form>
+        <div class="section-body">
+          <div id="maint-${v.id}"></div>
+          <form class="grid2 add-maint" style="margin-top:8px">
+            <input name="title" placeholder="Intitulé (ex: Vidange)">
+            <input name="date" type="date" value="${todayISO()}">
+            <input name="next" type="date" placeholder="Prochain (optionnel)">
+            <input name="km" type="number" placeholder="Km (optionnel)">
+            <button>Ajouter</button>
+          </form>
+        </div>
       </details>
 
-      <details class="box" style="margin-top:10px">
+      <details class="box">
         <summary>Assurance / CT</summary>
-        <form class="grid2 set-deadlines" style="margin-top:8px">
-          <input name="insurance" type="date" value="${v.insurance||''}" placeholder="Assurance (échéance)">
-          <input name="inspection" type="date" value="${v.inspection||''}" placeholder="Contrôle technique">
-          <button>Enregistrer</button>
-        </form>
+        <div class="section-body">
+          <form class="grid2 set-deadlines" style="margin-top:8px">
+            <input name="insurance" type="date" value="${v.insurance||''}" placeholder="Assurance (échéance)">
+            <input name="inspection" type="date" value="${v.inspection||''}" placeholder="Contrôle technique">
+            <button>Enregistrer</button>
+          </form>
+        </div>
       </details>
     `;
 
+    // actions
     card.querySelector('.open-docs')?.addEventListener('click', ()=>{
       goToTab('docs'); window.loadEntries(`Vehicules/${v.plate || v.id}`);
     });
@@ -827,7 +867,7 @@ function renderMaint(v){
   if (!list.length){ host.innerHTML = `<div class="muted">Aucun entretien</div>`; return; }
   list.forEach((m,idx)=>{
     const row = document.createElement('div'); row.className='item';
-    row.innerHTML = `<div><strong>${m.date} -- ${m.title}</strong><div class="who">${m.km?`${m.km} km · `:''}Prochain: ${m.next||'--'}</div></div>
+    row.innerHTML = `<div><strong>${escapeHTML(m.date)} -- ${escapeHTML(m.title)}</strong><div class="who">${m.km?`${escapeHTML(String(m.km))} km · `:''}Prochain: ${escapeHTML(m.next||'--')}</div></div>
     <div class="spacer"></div>${m.next?`<button class="ghost sendCal">→ Calendrier</button>`:''}<button class="del">Suppr</button>`;
     row.querySelector('.sendCal')?.addEventListener('click', ()=> addToCalendar({ title:`${m.title} (${v.plate})`, date:m.next, category:'Autre' }));
     row.querySelector('.del')?.addEventListener('click', ()=>{ (v.maintenance||=[]).splice(idx,1); save(); renderMaint(v); });
@@ -839,7 +879,7 @@ vehicleAddForm?.addEventListener('submit', (e)=>{
   e.preventDefault();
   const fd = new FormData(vehicleAddForm);
   const v = {
-    id: (fd.get('plate')||'').toUpperCase().replace(/\W+/g,'-') || ('veh-'+Math.random().toString(36).slice(2,7)),
+    id: (fd.get('plate')||'').toUpperCase().replace(/\W+/g,'-') || ('veh-'+uid()),
     plate: (fd.get('plate')||'').toUpperCase(),
     make: fd.get('make')||'',
     model: fd.get('model')||'',
@@ -849,10 +889,13 @@ vehicleAddForm?.addEventListener('submit', (e)=>{
     maintenance: []
   };
   if (!v.plate) return;
-  (state.vehicles.list ||= []).push(v); save(); vehicleAddForm.reset(); renderVehicles();
+  (state.vehicles.list ||= []).unshift(v); // en tête
+  save(); vehicleAddForm.reset(); renderVehicles();
 });
 
-// ===== INIT =====
+// ===========================
+// INIT
+// ===========================
 (function init(){
   showPanel('home');
   renderTasks(); renderBudget(); renderNotes();
@@ -864,3 +907,5 @@ vehicleAddForm?.addEventListener('submit', (e)=>{
   // santé / véhicules
   renderHealth(); renderVehicles();
 })();
+
+Si tu veux, je te fournis aussi le CSS minimal correspondant aux classes .card-header, .card-actions, et à la grille pour que tout s’aligne nickel.
