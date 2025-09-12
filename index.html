@@ -225,48 +225,42 @@
   </section>
 
   <!-- Santé -->
-  <section id="health" class="panel">
-    <h2>Santé</h2>
+<section id="health" class="panel">
+  <h2>Santé</h2>
 
-    <!-- Liste personnes -->
-    <div class="cards" id="healthPeople"></div>
+  <!-- BARRE D’AJOUT STICKY -->
+  <form id="healthAddForm" class="addbar grid2">
+    <input name="name" placeholder="Prénom" required>
+    <input name="blood" placeholder="Groupe sanguin (ex: O+)">
+    <input name="allergies" placeholder="Allergies (séparées par ,)">
+    <input name="conditions" placeholder="Maladies chroniques (séparées par ,)">
+    <input name="doctor" placeholder="Médecin traitant">
+    <input name="emergency" placeholder="Contact d’urgence (nom · tel)">
+    <button type="submit" class="btn btn-primary">Ajouter</button>
+  </form>
 
-    <!-- Ajouter / éditer personne -->
-    <details class="box">
-      <summary>Ajouter une personne</summary>
-      <form id="healthAddForm" class="grid2">
-        <input name="name" placeholder="Prénom" required>
-        <input name="blood" placeholder="Groupe sanguin (ex: O+)">
-        <input name="allergies" placeholder="Allergies (séparées par ,)">
-        <input name="conditions" placeholder="Maladies chroniques (séparées par ,)">
-        <input name="doctor" placeholder="Médecin traitant">
-        <input name="emergency" placeholder="Contact d’urgence (nom · tel)">
-        <button type="submit">Ajouter</button>
-      </form>
-    </details>
-  </section>
+  <!-- LISTE DES CARTES -->
+  <div class="cards" id="healthPeople"></div>
+</section>
 
   <!-- Véhicules -->
-  <section id="vehicles" class="panel">
-    <h2>Véhicules</h2>
+<section id="vehicles" class="panel">
+  <h2>Véhicules</h2>
 
-    <!-- Liste véhicules -->
-    <div class="cards" id="vehicleList"></div>
+  <!-- BARRE D’AJOUT STICKY -->
+  <form id="vehicleAddForm" class="addbar grid2">
+    <input name="plate" placeholder="Immatriculation (ex: AB-123-CD)" required>
+    <input name="make" placeholder="Marque (ex: Peugeot)">
+    <input name="model" placeholder="Modèle (ex: 308)">
+    <input name="year" type="number" placeholder="Année (ex: 2018)">
+    <input name="vin" placeholder="VIN (optionnel)">
+    <input name="mileage" type="number" placeholder="Kilométrage actuel">
+    <button type="submit" class="btn btn-primary">Ajouter</button>
+  </form>
 
-    <!-- Ajouter véhicule -->
-    <details class="box">
-      <summary>Ajouter un véhicule</summary>
-      <form id="vehicleAddForm" class="grid2">
-        <input name="plate" placeholder="Immatriculation (ex: AB-123-CD)" required>
-        <input name="make" placeholder="Marque (ex: Peugeot)">
-        <input name="model" placeholder="Modèle (ex: 308)">
-        <input name="year" type="number" placeholder="Année (ex: 2018)">
-        <input name="vin" placeholder="VIN (optionnel)">
-        <input name="mileage" type="number" placeholder="Kilométrage actuel">
-        <button type="submit">Ajouter</button>
-      </form>
-    </details>
-  </section>
+  <!-- LISTE DES CARTES -->
+  <div class="cards" id="vehicleList"></div>
+</section>
 
   <!-- Messages -->
   <section id="chat" class="panel">
