@@ -6,7 +6,7 @@ export const todayISO = () => { const d=new Date(); return `${d.getFullYear()}-$
 export const escapeHTML = s => (s||'').replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 export const fmtEUR = x => (x||0).toLocaleString('fr-FR',{style:'currency',currency:'EUR'});
 
-// ===== State (localStorage)
+// ===== State
 const KEY = 'familyApp.v3';
 const DEFAULT_STATE = {
   tasks:[], tx:[], notes:"", events:[],
@@ -26,7 +26,7 @@ export const state = (()=> {
 })();
 export const save = ()=> localStorage.setItem(KEY, JSON.stringify(state));
 
-// ===== Worker endpoints (facultatifs)
+// ===== Worker (optionnel)
 export const WORKER_URL = 'https://family-app.teiki5320.workers.dev';
 export const SECRET = 'Partenaire85/';
 export const ROOM   = 'family';
@@ -40,8 +40,9 @@ export async function addToCalendar({ title, date, time='09:00', place='', categ
   }catch(e){}
 }
 
-// ===== Router (ordre fixé)
+// ===== Router
 const routes = {
+  accueil:     () => import('./accueil.js'),
   listes:      () => import('./listes.js'),
   calendrier:  () => import('./calendrier.js'),
   document:    () => import('./document.js'),
@@ -50,23 +51,30 @@ const routes = {
   vehicule:    () => import('./vehicule.js'),
   message:     () => import('./message.js'),
   menu:        () => import('./menu.js'),
-  '':          () => import('./listes.js'),
+  '':          () => import('./accueil.js'),
 };
 
 let current = { destroy:null };
 
 async function renderRoute(){
-  const hash = (location.hash || '#/listes').replace('#/','');
+  const hash = (location.hash || '#/accueil').replace('#/','');
   const name = routes[hash] ? hash : '';
+
   try{ current.destroy && current.destroy(); }catch{}
+
   const mod = await routes[name]();
   const el = document.getElementById('app');
   el.innerHTML = '';
   const api = (mod.init && typeof mod.init === 'function')
     ? mod.init(el, { $, $$, state, save, fmtEUR, todayISO, escapeHTML, addToCalendar, WORKER_URL, SECRET, ROOM })
     : null;
-  current.destroy = (mod.destroy && typeof mod.destroy === 'function') ? mod.destroy : (api && api.destroy ? api.destroy : null);
-  document.title = `Family · ${name ? name[0].toUpperCase()+name.slice(1) : 'Listes'}`;
+
+  current.destroy = (mod.destroy && typeof mod.destroy === 'function')
+    ? mod.destroy
+    : (api && api.destroy ? api.destroy : null);
+
+  document.title = `Family · ${name ? name[0].toUpperCase()+name.slice(1) : 'Accueil'}`;
 }
+
 window.addEventListener('hashchange', renderRoute);
 document.addEventListener('DOMContentLoaded', renderRoute);

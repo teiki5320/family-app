@@ -1,27 +1,22 @@
 <!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8">
+  <meta charset="utf-8" />
   <title>Family App</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link rel="stylesheet" href="./style.css">
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="./style.css" />
+  <link rel="manifest" href="manifest.json" />
 </head>
 <body>
   <header class="app-header">
-    <button class="home-btn" onclick="location.hash='#/listes'">🏠</button>
+    <button class="home-btn" title="Accueil" onclick="location.hash='#/accueil'">🏠</button>
     <h1>Family App</h1>
-    <nav class="header-actions row">
-      <a href="#/listes"     class="btn">Listes</a>
-      <a href="#/calendrier" class="btn">Calendrier</a>
-      <a href="#/document"   class="btn">Documents</a>
-      <a href="#/impots"     class="btn">Impôts</a>
-      <a href="#/sante"      class="btn">Santé</a>
-      <a href="#/vehicule"   class="btn">Véhicules</a>
-      <a href="#/message"    class="btn">Messages</a>
-      <a href="#/menu"       class="btn">Menu</a>
-    </nav>
   </header>
-  <main><div id="app"></div></main>
+
+  <main>
+    <div id="app"></div>
+  </main>
+
   <script type="module" src="./js/core.js"></script>
 </body>
 </html>
