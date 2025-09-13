@@ -1,5 +1,3 @@
-// Page Véhicules : fiches + entretiens + échéances
-// Version simple en mémoire (pas de persistance pour l’instant)
 export function init(el, core){
   let vehicles = [];
 
