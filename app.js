@@ -1,18 +1,10 @@
-Voici app.js complet, propre, avec :
-	•	barres d’ajout collantes (tes formulaires existants),
-	•	grille de cartes cohérente,
-	•	header de carte avec actions à droite (.card-header, .card-actions),
-	•	ajouts en tête de liste (unshift) pour voir la carte immédiatement.
-
-Colle-le entièrement à la place de ton fichier actuel.
-
 // ===========================
 // Helpers & State
 // ===========================
 const $  = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
-const KEY = 'familyApp.v2'; // nouveau namespace
+const KEY = 'familyApp.v2'; // namespace de stockage
 const DEFAULT_STATE = {
   tasks: [], tx: [], notes: "", events: [],
   health: { persons: [] },
@@ -44,6 +36,7 @@ function goToTab(id){ if (id) showPanel(id); }
 $('#btnHome')?.addEventListener('click', ()=> goToTab('home'));
 $$('.tile[data-tab]')?.forEach(t=> t.addEventListener('click', ()=> goToTab(t.dataset.tab)));
 
+// Menu "clic&miam"
 const MENU_PREFIX = "https://clicetmiam.fr/mesmenus/5387/5765/";
 const tz = "Europe/Paris";
 function partsFromDate(d){
@@ -51,10 +44,7 @@ function partsFromDate(d){
   const [{ value: dd }, , { value: mm }, , { value: yyyy }] = fmt.formatToParts(d);
   return { yyyy, mm, dd };
 }
-function buildMenuUrl(d){
-  const { yyyy, mm, dd } = partsFromDate(d);
-  return MENU_PREFIX + `${yyyy}/${mm}/${dd}Menu`;
-}
+function buildMenuUrl(d){ const { yyyy, mm, dd } = partsFromDate(d); return MENU_PREFIX + `${yyyy}/${mm}/${dd}Menu`; }
 $('#tileMenu')?.addEventListener('click', ()=> window.open(buildMenuUrl(new Date()), '_blank'));
 
 // ===========================
@@ -66,7 +56,7 @@ const ROOM   = 'family';
 const WORKER_CAL_ADD  = `${WORKER_URL}/cal/add`;
 const WORKER_CAL_LIST = `${WORKER_URL}/cal/list`;
 
-// Helper calendrier (remote)
+// Calendrier distant
 async function addToCalendar({ title, date, time='09:00', place='', category='Autre', note='' }){
   try{
     await fetch(WORKER_CAL_ADD, {
@@ -78,7 +68,8 @@ async function addToCalendar({ title, date, time='09:00', place='', category='Au
 }
 
 // ===========================
-/* Dashboard */
+// Dashboard
+// ===========================
 function updateDashboard(){
   const tasksCount = (state.tasks||[]).filter(t=>!t.done).length;
   $('#dashTasksCount') && ($('#dashTasksCount').textContent = String(tasksCount));
@@ -450,7 +441,7 @@ async function loadEntries(folderPath = DOCS.folder) {
   DOCS.files   = data.files   || [];
   renderFolderGrid(); renderFiles();
 }
-window.loadEntries = loadEntries; // expose pour Santé/Véhicules
+window.loadEntries = loadEntries; // expose
 
 function renderFolderGrid() {
   if (!folderGrid) return;
@@ -897,15 +888,11 @@ vehicleAddForm?.addEventListener('submit', (e)=>{
 // INIT
 // ===========================
 (function init(){
-  showPanel('home');
+  showPanel('home');               // assure une section visible
   renderTasks(); renderBudget(); renderNotes();
-  // calendrier
-  const now = new Date(); calMonth = now.getMonth(); calYear = now.getFullYear();
+  const now = new Date();          // calendrier
+  calMonth = now.getMonth(); calYear = now.getFullYear();
   renderEvents();
-  // docs
   updateDashboard();
-  // santé / véhicules
-  renderHealth(); renderVehicles();
+  renderHealth(); renderVehicles(); // santé / véhicules
 })();
-
-Si tu veux, je te fournis aussi le CSS minimal correspondant aux classes .card-header, .card-actions, et à la grille pour que tout s’aligne nickel.
