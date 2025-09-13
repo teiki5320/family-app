@@ -1,120 +1,97 @@
 export function init(el, core){
-  const { $, $$, state, save, todayISO, pad, escapeHTML } = core;
-  state.events ||= [];
+  // État local simple
+  let events = [];
 
   el.innerHTML = `
-    <section>
+    <section class="fade-in">
       <h2>Calendrier</h2>
-      <div class="addbar">
-        <form id="eventForm" class="grid2">
-          <input id="eventTitle" placeholder="Titre" required>
-          <input id="eventDate" type="date" value="${todayISO()}" required>
-          <input id="eventTime" type="time" value="09:00">
-          <input id="eventPlace" placeholder="Lieu">
-          <select id="eventCategory">
-            <option>Autre</option><option>Santé</option><option>École</option><option>Budget</option>
-          </select>
-          <input id="eventNote" placeholder="Note">
-          <button class="btn btn-primary">Ajouter</button>
-        </form>
-      </div>
 
-      <div class="row" style="gap:12px;align-items:flex-end">
-        <div>
-          <div class="cal-month" id="calMonthLabel"></div>
-          <div class="row" style="gap:6px;margin-top:6px">
-            <button id="calPrev" class="btn">◀</button>
-            <button id="calToday" class="btn">Aujourd'hui</button>
-            <button id="calNext" class="btn">▶</button>
+      <!-- Addbar -->
+      <form id="evForm" class="addbar grid2">
+        <input name="title" placeholder="Titre de l'évènement" required>
+        <input name="date" type="date" value="${core.todayISO()}" required>
+        <input name="time" type="time" value="09:00">
+        <input name="place" placeholder="Lieu (optionnel)">
+        <button class="btn" type="submit">Ajouter</button>
+      </form>
+
+      <!-- Résumé -->
+      <div class="card" id="evSummary" style="margin-bottom:12px">
+        <div class="card-header">
+          <div class="card-title-wrap">
+            <h3 class="card-title">Prochain évènement</h3>
+            <div class="card-meta" id="evNextMeta">--</div>
           </div>
         </div>
-        <div class="spacer"></div>
-        <select id="calFilter"><option value="*">Toutes catégories</option><option>Autre</option><option>Santé</option><option>École</option><option>Budget</option></select>
-        <input id="calSearch" placeholder="Rechercher...">
       </div>
 
-      <div class="cal-grid" id="calGrid"></div>
-      <ul class="list" id="eventList" style="margin-top:10px"></ul>
+      <!-- Liste -->
+      <div class="cards" id="evList"></div>
     </section>
   `;
 
-  const grid = $('#calGrid', el), monthLbl = $('#calMonthLabel', el), list=$('#eventList', el);
-  const form=$('#eventForm', el), title=$('#eventTitle', el), date=$('#eventDate', el), time=$('#eventTime', el);
-  const place=$('#eventPlace', el), cat=$('#eventCategory', el), note=$('#eventNote', el);
-  const filter=$('#calFilter', el), search=$('#calSearch', el);
+  const $ = (s)=> el.querySelector(s);
+  const form = $('#evForm');
+  const list = $('#evList');
+  const nextMeta = $('#evNextMeta');
 
-  let selectedDate = todayISO();
-  let calMonth = new Date().getMonth();
-  let calYear  = new Date().getFullYear();
-
-  function renderMonth(y,m){
-    grid.innerHTML='';
-    const first = new Date(y,m,1);
-    const start = first.getDay()===0 ? 6 : first.getDay()-1;
-    const daysInMonth = new Date(y,m+1,0).getDate();
-    monthLbl.textContent = new Intl.DateTimeFormat('fr-FR',{month:'long',year:'numeric'}).format(first);
-    for(let i=0;i<start;i++) grid.appendChild(document.createElement('div'));
-    for(let d=1; d<=daysInMonth; d++){
-      const cell = document.createElement('div'); cell.className='day';
-      const ds = `${y}-${pad(m+1)}-${pad(d)}`;
-      if (ds === todayISO())   cell.classList.add('today');
-      if (ds === selectedDate) cell.classList.add('selected');
-      cell.innerHTML = `<div class="num">${d}</div>`;
-      (state.events||[]).filter(ev=>ev.date===ds).forEach(()=> {
-        const dot=document.createElement('span'); dot.className='cal-dot'; cell.appendChild(dot);
-      });
-      cell.onclick = ()=>{ selectedDate = (selectedDate === ds) ? null : ds; renderEvents(); renderMonth(calYear, calMonth); };
-      grid.appendChild(cell);
-    }
+  function sortEvents(a,b){
+    return (a.date + (a.time||'')).localeCompare(b.date + (b.time||''));
   }
 
-  function renderEvents(){
-    const f = filter.value || '*';
-    const q = (search.value||'').toLowerCase();
-    list.innerHTML='';
-    const sel = selectedDate;
-    const events = (state.events||[]).filter(ev=>{
-      const byDay  = !sel || ev.date === sel;
-      const byCat  = (f==='*' || ev.category===f);
-      const byText = (!q || (ev.title||'').toLowerCase().includes(q) || (ev.place||'').toLowerCase().includes(q));
-      return byDay && byCat && byText;
-    }).sort((a,b)=> (a.date+(a.time||'')).localeCompare(b.date+(b.time||'')));
+  function renderSummary(){
+    if (!events.length){ nextMeta.textContent = 'Aucun évènement'; return; }
+    const nowISO = new Date().toISOString().slice(0,16);
+    const next = [...events].sort(sortEvents).find(e => (e.date+'T'+(e.time||'00:00')) >= nowISO) || [...events].sort(sortEvents)[0];
+    const dt = new Date(next.date + 'T' + (next.time||'09:00'));
+    nextMeta.textContent = `${next.title} -- ${dt.toLocaleString('fr-FR')}${next.place?` · ${next.place}`:''}`;
+  }
 
+  function render(){
+    list.innerHTML = '';
     if (!events.length){
-      const li = document.createElement('li'); li.className='item';
-      li.innerHTML = `<div><strong>Aucun évènement</strong><div class="who">Essaie un autre jour / filtre</div></div>`;
-      list.appendChild(li);
-    } else {
-      events.forEach(ev=>{
-        const li = document.createElement('li'); li.className='item';
-        const when = `${ev.date} ${ev.time||''}`.trim();
-        li.innerHTML = `
-          <div><strong>${escapeHTML(ev.title)}</strong>
-            <div class="who">${escapeHTML(when)}${ev.place?` · ${escapeHTML(ev.place)}`:''} [${escapeHTML(ev.category||'Autre')}]</div>
-          </div>
-          <div class="spacer"></div>
-          <button class="del">Suppr</button>`;
-        li.querySelector('.del').onclick = ()=>{
-          const idx = state.events.indexOf(ev);
-          if (idx>-1) { state.events.splice(idx,1); save(); renderEvents(); renderMonth(calYear, calMonth); }
-        };
-        list.appendChild(li);
-      });
+      list.innerHTML = `<div class="card"><p class="muted">Aucun évènement</p></div>`;
+      renderSummary(); return;
     }
+    events.sort(sortEvents).forEach((e, i)=>{
+      const dt = (e.time ? `${e.date} · ${e.time}` : e.date);
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <div class="card-header">
+          <div class="card-title-wrap">
+            <h3 class="card-title">${core.escapeHTML(e.title)}</h3>
+            <div class="card-meta">${dt}${e.place?` · ${core.escapeHTML(e.place)}`:''}</div>
+          </div>
+          <div class="card-actions">
+            <button class="del btn-danger">Suppr</button>
+          </div>
+        </div>
+      `;
+      card.querySelector('.del').addEventListener('click', ()=>{
+        events.splice(i,1); render();
+      });
+      list.appendChild(card);
+    });
+    renderSummary();
   }
 
-  $('#calPrev', el).onclick = ()=>{ if(--calMonth<0){ calMonth=11; calYear--; } renderMonth(calYear,calMonth); };
-  $('#calNext', el).onclick = ()=>{ if(++calMonth>11){ calMonth=0; calYear++; } renderMonth(calYear,calMonth); };
-  $('#calToday', el).onclick= ()=>{ const n=new Date(); calMonth=n.getMonth(); calYear=n.getFullYear(); selectedDate=todayISO(); renderMonth(calYear,calMonth); renderEvents(); };
-  filter.onchange = renderEvents; search.oninput = renderEvents;
+  form.addEventListener('submit', (ev)=>{
+    ev.preventDefault();
+    const fd = new FormData(form);
+    const item = {
+      title: (fd.get('title')||'').trim(),
+      date:  fd.get('date') || core.todayISO(),
+      time:  (fd.get('time')||'').trim(),
+      place: (fd.get('place')||'').trim(),
+      ts: Date.now()
+    };
+    if (!item.title || !item.date) return;
+    events.unshift(item);
+    form.reset();
+    render();
+  });
 
-  form.onsubmit = (e)=>{ e.preventDefault();
-    const ev = { title:title.value.trim(), date: date.value, time: time.value||'09:00', place: (place.value||''), category: (cat.value||'Autre'), note: (note.value||'') };
-    if(!ev.title || !ev.date) return;
-    state.events.push(ev); save(); form.reset(); date.value = todayISO(); renderEvents(); renderMonth(calYear, calMonth);
-  };
-
-  renderMonth(calYear, calMonth); renderEvents();
-  return { destroy(){ } };
+  render();
+  return { destroy(){ events=[]; } };
 }
-export function destroy(){}

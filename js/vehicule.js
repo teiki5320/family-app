@@ -1,123 +1,163 @@
+// Page Véhicules : fiches + entretiens + échéances
+// Version simple en mémoire (pas de persistance pour l’instant)
 export function init(el, core){
-  const { $, state, save, todayISO, escapeHTML, addToCalendar } = core;
-  state.vehicles ||= { list:[] };
+  let vehicles = [];
 
   el.innerHTML = `
-    <section>
+    <section class="fade-in">
       <h2>Véhicules</h2>
-      <div class="addbar">
-        <form id="vehicleAddForm" class="grid2">
-          <input name="plate" placeholder="Immatriculation (ex: AB-123-CD)" required>
-          <input name="make" placeholder="Marque (ex: Peugeot)">
-          <input name="model" placeholder="Modèle (ex: 308)">
-          <input name="year" type="number" placeholder="Année (ex: 2018)">
-          <input name="vin" placeholder="VIN (optionnel)">
-          <input name="mileage" type="number" placeholder="Kilométrage actuel">
-          <button class="btn btn-primary">Ajouter</button>
-        </form>
-      </div>
-      <div class="cards" id="vehicleList"></div>
+
+      <!-- Addbar : ajouter un véhicule -->
+      <form id="vehAdd" class="addbar grid2">
+        <input name="plate" placeholder="Immat (ex: AB-123-CD)" required>
+        <input name="make"  placeholder="Marque (ex: Peugeot)">
+        <input name="model" placeholder="Modèle (ex: 308)">
+        <input name="year"  type="number" placeholder="Année">
+        <input name="mileage" type="number" placeholder="Km actuel">
+        <button class="btn" type="submit">Ajouter</button>
+      </form>
+
+      <!-- Liste des véhicules -->
+      <div id="vehList" class="cards"></div>
     </section>
   `;
 
-  const list = $('#vehicleList', el), form=$('#vehicleAddForm', el);
-
-  form.onsubmit = (e)=>{
-    e.preventDefault();
-    const fd = new FormData(form);
-    const v = {
-      id: (fd.get('plate')||'').toUpperCase().replace(/\W+/g,'-') || ('veh-'+Math.random().toString(36).slice(2,7)),
-      plate: (fd.get('plate')||'').toUpperCase(),
-      make: fd.get('make')||'',
-      model: fd.get('model')||'',
-      year: Number(fd.get('year')||'')||'',
-      vin: fd.get('vin')||'',
-      mileage: Number(fd.get('mileage')||'')||'',
-      maintenance: []
-    };
-    if (!v.plate) return;
-    state.vehicles.list.unshift(v); save(); form.reset(); render();
-  };
+  const $ = (s)=> el.querySelector(s);
+  const list = $('#vehList');
+  const form = $('#vehAdd');
 
   function renderMaint(v, host){
     host.innerHTML = '';
-    const arr = (v.maintenance||[]).sort((a,b)=> (b.date||'').localeCompare(a.date||''));
-    if (!arr.length){ host.innerHTML = `<div class="muted">Aucun entretien</div>`; return; }
-    arr.forEach((m,idx)=>{
-      const row = document.createElement('div'); row.className='item';
-      row.innerHTML = `<div><strong>${escapeHTML(m.date)} -- ${escapeHTML(m.title)}</strong><div class="who">${m.km?`${escapeHTML(String(m.km))} km · `:''}Prochain: ${escapeHTML(m.next||'--')}</div></div>
-      <div class="spacer"></div>${m.next?`<button class="ghost sendCal">→ Calendrier</button>`:''}<button class="del">Suppr</button>`;
-      row.querySelector('.sendCal')?.addEventListener('click', ()=> addToCalendar({ title:`${m.title} (${v.plate})`, date:m.next, category:'Autre' }));
-      row.querySelector('.del').onclick = ()=>{ (v.maintenance||[]).splice(idx,1); save(); render(); };
+    const list = (v.maintenance||[]).slice().sort((a,b)=> (b.date||'').localeCompare(a.date||''));
+    if (!list.length){ host.innerHTML = `<div class="muted">Aucun entretien</div>`; return; }
+    list.forEach((m, idx)=>{
+      const row = document.createElement('div');
+      row.className = 'item';
+      row.innerHTML = `
+        <div>
+          <strong>${m.date || '--'} -- ${core.escapeHTML(m.title||'')}</strong>
+          <div class="who">${m.km?`${m.km} km · `:''}Prochain: ${m.next||'--'}</div>
+        </div>
+        <div class="spacer"></div>
+        <button class="del btn-danger">Suppr</button>
+      `;
+      row.querySelector('.del').addEventListener('click', ()=>{
+        v.maintenance.splice(idx,1); render();
+      });
       host.appendChild(row);
     });
   }
 
   function render(){
     list.innerHTML = '';
-    const vs = state.vehicles.list||[];
-    if (!vs.length){ list.innerHTML = `<div class="card"><strong>Aucun véhicule</strong><div class="muted">Ajoute via la barre.</div></div>`; return; }
-    vs.forEach(v=>{
-      const card = document.createElement('div'); card.className='card';
+    if (!vehicles.length){
+      list.innerHTML = `<div class="card"><p class="muted">Aucun véhicule -- ajoute-en un ci-dessus.</p></div>`;
+      return;
+    }
+
+    vehicles.forEach((v, i)=>{
+      const card = document.createElement('div');
+      card.className = 'card';
+      const subtitle = `${core.escapeHTML(v.plate||'')} · ${v.year||'--'} · ${v.mileage?`${v.mileage} km`:'--'}`;
       card.innerHTML = `
         <div class="card-header">
           <div class="card-title-wrap">
-            <h3 class="card-title">${escapeHTML(v.make||'--')} ${escapeHTML(v.model||'')}</h3>
-            <div class="card-meta">${escapeHTML(v.plate||'')} · ${escapeHTML(String(v.year||'--'))} · ${v.mileage?`${escapeHTML(String(v.mileage))} km`:'--'}</div>
-            ${v.vin ? `<div class="card-meta">VIN : ${escapeHTML(v.vin)}</div>` : ``}
+            <h3 class="card-title">${core.escapeHTML(v.make||'--')} ${core.escapeHTML(v.model||'')}</h3>
+            <div class="card-meta">${subtitle}</div>
           </div>
           <div class="card-actions">
-            <button class="badge js-docs">📂 Dossier</button>
-            <button class="btn btn-danger js-del">Suppr</button>
+            <button class="btn-danger del-veh">Suppr</button>
           </div>
         </div>
-        <details class="box"><summary>Entretiens & rappels</summary>
+
+        <div class="box">
+          <summary>Entretiens & rappels</summary>
           <div class="section-body">
             <div id="maint-${v.id}"></div>
             <form class="grid2 add-maint" style="margin-top:8px">
               <input name="title" placeholder="Intitulé (ex: Vidange)">
-              <input name="date" type="date" value="${todayISO()}">
-              <input name="next" type="date" placeholder="Prochain (optionnel)">
-              <input name="km" type="number" placeholder="Km (optionnel)">
-              <button>Ajouter</button>
+              <input name="date"  type="date" value="${core.todayISO()}">
+              <input name="next"  type="date" placeholder="Prochain (optionnel)">
+              <input name="km"    type="number" placeholder="Km (optionnel)">
+              <button class="btn">Ajouter</button>
             </form>
           </div>
-        </details>
-        <details class="box"><summary>Assurance / CT</summary>
+        </div>
+
+        <div class="box">
+          <summary>Échéances</summary>
           <div class="section-body">
             <form class="grid2 set-deadlines" style="margin-top:8px">
-              <input name="insurance" type="date" value="${v.insurance||''}" placeholder="Assurance (échéance)">
+              <input name="insurance"  type="date" value="${v.insurance||''}"  placeholder="Assurance (échéance)">
               <input name="inspection" type="date" value="${v.inspection||''}" placeholder="Contrôle technique">
-              <button>Enregistrer</button>
+              <button class="btn">Enregistrer</button>
             </form>
+            <div class="muted" style="margin-top:6px">
+              Assurance: ${v.insurance||'--'} · CT: ${v.inspection||'--'}
+            </div>
           </div>
-        </details>
+        </div>
       `;
-      card.querySelector('.js-docs').onclick = ()=>{ location.hash='#/document'; sessionStorage.setItem('docs_open_folder', `Vehicules/${v.plate || v.id}`); };
-      card.querySelector('.js-del').onclick  = ()=>{ if(!confirm(`Supprimer ${v.make||''} ${v.model||''} (${v.plate||''}) ?`)) return; state.vehicles.list = vs.filter(x=>x!==v); save(); render(); };
 
-      renderMaint(v, card.querySelector(`#maint-${v.id}`));
-      card.querySelector('.add-maint').onsubmit = (e)=>{
-        e.preventDefault(); const fd=new FormData(e.currentTarget);
-        const m = { title:fd.get('title')||'', date:fd.get('date')||todayISO(), next:fd.get('next')||'', km:fd.get('km')||'' };
-        if (!m.title) return; (v.maintenance ||= []).push(m); save(); render();
-        if (m.next){ addToCalendar({ title:`${m.title} (${v.make||''} ${v.model||''} ${v.plate||''})`, date:m.next, category:'Autre' }); }
-      };
-      card.querySelector('.set-deadlines').onsubmit = (e)=>{
-        e.preventDefault(); const fd=new FormData(e.currentTarget);
-        v.insurance  = fd.get('insurance') || '';
-        v.inspection = fd.get('inspection') || '';
-        save();
-        if (v.insurance){  addToCalendar({ title:`Assurance véhicule (${v.plate})`,  date:v.insurance, category:'Autre' }); }
-        if (v.inspection){ addToCalendar({ title:`Contrôle technique (${v.plate})`, date:v.inspection, category:'Autre' }); }
+      // actions haut de carte
+      card.querySelector('.del-veh').addEventListener('click', ()=>{
+        if (!confirm(`Supprimer ${v.make||''} ${v.model||''} (${v.plate||''}) ?`)) return;
+        vehicles.splice(i,1); render();
+      });
+
+      // liste des maintenances
+      const maintHost = card.querySelector(`#maint-${v.id}`);
+      renderMaint(v, maintHost);
+
+      // form add-maint
+      card.querySelector('.add-maint').addEventListener('submit', (e)=>{
+        e.preventDefault();
+        const fd = new FormData(e.currentTarget);
+        const m = {
+          title:(fd.get('title')||'').trim(),
+          date: (fd.get('date')||core.todayISO()).trim(),
+          next: (fd.get('next')||'').trim(),
+          km:   (fd.get('km')||'').trim()
+        };
+        if (!m.title) return;
+        (v.maintenance ||= []).push(m);
+        render();
+      });
+
+      // form set-deadlines
+      card.querySelector('.set-deadlines').addEventListener('submit', (e)=>{
+        e.preventDefault();
+        const fd = new FormData(e.currentTarget);
+        v.insurance  = (fd.get('insurance')||'').trim();
+        v.inspection = (fd.get('inspection')||'').trim();
+        render();
         alert('Échéances enregistrées');
-      };
+      });
 
       list.appendChild(card);
     });
   }
 
+  // addbar : ajouter un véhicule
+  form.addEventListener('submit', (e)=>{
+    e.preventDefault();
+    const fd = new FormData(form);
+    const v = {
+      id: (fd.get('plate')||'').toUpperCase().replace(/\W+/g,'-') || ('veh-'+Math.random().toString(36).slice(2,7)),
+      plate: (fd.get('plate')||'').toUpperCase().trim(),
+      make:  (fd.get('make')||'').trim(),
+      model: (fd.get('model')||'').trim(),
+      year: Number(fd.get('year')||'') || '',
+      mileage: Number(fd.get('mileage')||'') || '',
+      maintenance: [],
+      insurance: '', inspection: ''
+    };
+    if (!v.plate) return;
+    vehicles.unshift(v);
+    form.reset();
+    render();
+  });
+
   render();
-  return { destroy(){} };
+  return { destroy(){ vehicles=[]; } };
 }
-export function destroy(){}

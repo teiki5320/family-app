@@ -1,94 +1,115 @@
-export function init(el, core){
-  const { $, state, save, fmtEUR, todayISO, escapeHTML, addToCalendar } = core;
-  state.impots ||= { items:[] };
+export function init(el){
+  // Items : { type: 'echeance' | 'paiement', label, date, amount }
+  let items = [];
+
+  const fmtEUR = (x)=> (Number(x)||0).toLocaleString('fr-FR',{ style:'currency', currency:'EUR' });
 
   el.innerHTML = `
-    <section>
+    <section class="fade-in">
       <h2>Impôts</h2>
-      <div class="addbar">
-        <form id="impAdd" class="grid2">
-          <select name="type" required>
-            <option value="" disabled selected>Type d'impôt</option>
-            <option>Impôt sur le revenu</option><option>Foncier</option><option>Habitation</option>
-            <option>TVA</option><option>IS</option><option>Autre</option>
-          </select>
-          <input name="annee" type="number" placeholder="Année (ex: 2025)" required>
-          <input name="montant" type="number" step="0.01" placeholder="Montant (€)" required>
-          <input name="echeance" type="date" value="${todayISO()}" required>
-          <input name="note" placeholder="Note (optionnel)">
-          <button class="btn btn-primary" type="submit">Ajouter</button>
-        </form>
+
+      <!-- Addbar -->
+      <form id="taxForm" class="addbar grid2">
+        <select name="type" required>
+          <option value="echeance">Échéance</option>
+          <option value="paiement">Paiement</option>
+        </select>
+        <input name="label" placeholder="Libellé (ex: Solde IR 2025)" required>
+        <input name="date"  type="date" required>
+        <input name="amount" type="number" step="0.01" placeholder="Montant (ex: 250.00)" required>
+        <button class="btn" type="submit">Ajouter</button>
+      </form>
+
+      <!-- Synthèse -->
+      <div class="grid2" style="margin-bottom:12px">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title-wrap">
+              <h3 class="card-title">Total Échéances</h3>
+              <div id="sumDue" class="card-meta">--</div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title-wrap">
+              <h3 class="card-title">Total Paiements</h3>
+              <div id="sumPaid" class="card-meta">--</div>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="row" style="margin:8px 0 4px">
-        <div class="spacer"></div>
-        <label class="chip"><input type="checkbox" id="showPaid"> Afficher les payés</label>
-      </div>
-      <div class="cards" id="impList"></div>
+
+      <!-- Liste -->
+      <div id="taxList" class="cards"></div>
     </section>
   `;
 
-  const form = $('#impAdd', el), list = $('#impList', el), showPaid = $('#showPaid', el);
+  const $ = (s)=> el.querySelector(s);
+  const form  = $('#taxForm');
+  const list  = $('#taxList');
+  const sumDueEl = $('#sumDue');
+  const sumPaidEl = $('#sumPaid');
 
-  form.onsubmit = (e)=>{
-    e.preventDefault();
-    const fd = new FormData(form);
-    const item = {
-      id: 'imp-'+Math.random().toString(36).slice(2,8),
-      type: (fd.get('type')||'').trim(),
-      annee: Number(fd.get('annee')||''),
-      montant: Number(fd.get('montant')||0),
-      echeance: fd.get('echeance') || todayISO(),
-      paye: false,
-      note: (fd.get('note')||'').trim()
-    };
-    if (!item.type || !item.annee || !item.echeance) return;
-    state.impots.items.unshift(item); save(); form.reset(); render();
-    addToCalendar({ title:`${item.type} ${item.annee}`, date:item.echeance, category:'Budget' });
-  };
-  showPaid.onchange = render;
+  function computeSums(){
+    let due=0, paid=0;
+    items.forEach(it=> {
+      const v = Number(it.amount)||0;
+      if (it.type === 'echeance') due += v; else paid += v;
+    });
+    sumDueEl.textContent  = fmtEUR(due);
+    sumPaidEl.textContent = fmtEUR(paid);
+  }
 
   function render(){
     list.innerHTML = '';
-    const items = (state.impots.items||[])
-      .filter(x => showPaid.checked ? true : !x.paye)
-      .sort((a,b)=> (a.echeance||'').localeCompare(b.echeance||''));
     if (!items.length){
-      list.innerHTML = `<div class="card"><strong>Aucune entrée</strong><div class="muted">Ajoute une ligne via la barre.</div></div>`;
-      return;
+      list.innerHTML = `<div class="card"><p class="muted">Aucune donnée pour le moment</p></div>`;
+      computeSums(); return;
     }
-    items.forEach(it=>{
-      const card = document.createElement('div'); card.className = 'card';
-      const due = new Date(it.echeance);
+    // tri par date
+    items.sort((a,b)=> (a.date||'').localeCompare(b.date||''));
+
+    items.forEach((it, i)=>{
+      const card = document.createElement('div');
+      card.className = 'card';
+      const meta = `${it.date||''} · ${fmtEUR(it.amount)} · ${it.type==='echeance'?'Échéance':'Paiement'}`;
       card.innerHTML = `
         <div class="card-header">
           <div class="card-title-wrap">
-            <h3 class="card-title">${escapeHTML(it.type)} ${escapeHTML(String(it.annee||''))}</h3>
-            <div class="card-meta">Échéance : ${due.toLocaleDateString('fr-FR')} · ${fmtEUR(it.montant)}</div>
-            ${it.note ? `<div class="card-meta">Note : ${escapeHTML(it.note)}</div>` : ``}
-            ${it.paye ? `<div class="card-meta" style="color:var(--ok)">✅ Payé</div>` : ``}
+            <h3 class="card-title">${it.label ? it.label.replace(/[<>&]/g,'') : '--'}</h3>
+            <div class="card-meta">${meta}</div>
           </div>
           <div class="card-actions">
-            <button class="badge js-cal">🗓️ Rappel</button>
-            <button class="badge js-docs">📂 Dossier</button>
-            ${it.paye ? `<button class="btn js-unpay">Marquer non payé</button>` : `<button class="btn btn-primary js-pay">Marquer payé</button>`}
-            <button class="btn btn-danger js-del">Suppr</button>
+            <button class="del btn-danger">Suppr</button>
           </div>
-        </div>`;
-      card.querySelector('.js-cal').onclick = ()=> addToCalendar({ title:`${it.type} ${it.annee}`, date: it.echeance, category:'Budget' });
-      card.querySelector('.js-docs').onclick = ()=>{
-        location.hash = '#/document';
-        sessionStorage.setItem('docs_open_folder', `Impots/${it.annee}-${it.type.replace(/\s+/g,'_')}`);
-      };
-      card.querySelector('.js-pay')?.addEventListener('click', ()=>{ it.paye=true; save(); render(); });
-      card.querySelector('.js-unpay')?.addEventListener('click', ()=>{ it.paye=false; save(); render(); });
-      card.querySelector('.js-del').onclick = ()=>{
-        if(!confirm(`Supprimer ${it.type} ${it.annee} ?`)) return;
-        state.impots.items = state.impots.items.filter(x=> x!==it); save(); render();
-      };
+        </div>
+      `;
+      card.querySelector('.del').addEventListener('click', ()=>{
+        items.splice(i,1); render();
+      });
       list.appendChild(card);
     });
+
+    computeSums();
   }
+
+  form.addEventListener('submit', (e)=>{
+    e.preventDefault();
+    const fd = new FormData(form);
+    const it = {
+      type:  fd.get('type') || 'echeance',
+      label: (fd.get('label')||'').trim(),
+      date:  (fd.get('date')||'').trim(),
+      amount:(fd.get('amount')||'').trim(),
+      ts: Date.now()
+    };
+    if (!it.label || !it.date || !it.amount) return;
+    items.unshift(it);
+    form.reset();
+    render();
+  });
+
   render();
-  return { destroy(){} };
+  return { destroy(){ items=[]; } };
 }
-export function destroy(){}
