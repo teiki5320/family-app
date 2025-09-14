@@ -1,4 +1,8 @@
 {
+  "familyApp.docs.v1" : "{\"folders\":[\"Azerty\"],\"filesByFolder\":{\"\":[],\"Azerty\":[]}}",
+  "familyApp.v1" : "{\"tasks\":[],\"tx\":[],\"notes\":\"\",\"events\":[]}",
+  "familyApp.impots.v2" : "[{\"year\":2024,\"status\":\"À préparer\",\"revenus\":0,\"impot\":0,\"acomptes\":0,\"mensualise\":true,\"notes\":\"\",\"checklist\":[],\"echeances\":[]}]",
   "familyApp.folders" : "[\"Général\",\"Mahana\"]",
-  "familyApp.v1" : "{\"tasks\":[],\"tx\":[],\"notes\":\"\",\"events\":[]}"
+  "familyApp.docs.v2" : "{\"folders\":[\"az\"],\"filesByFolder\":{\"\":[],\"az\":[{\"key\":\"1757808734278-uij1lyx2a1-IMG_1093.png\",\"name\":\"IMG_1093.png\",\"ts\":1757808734287,\"type\":\"image\/png\"}]}}",
+  "familyApp.impots.v1" : "[]"
 }
