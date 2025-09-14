@@ -13,7 +13,7 @@ export function init(el, core) {
           <div class="title">Calendrier</div>
           <div class="subtitle">Évènements</div>
         </a>
-        <a href="#/documents" class="tile">
+        <a href="#/document" class="tile">
           <div class="icon">📂</div>
           <div class="title">Documents</div>
           <div class="subtitle">Fichiers</div>
